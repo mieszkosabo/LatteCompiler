@@ -4,7 +4,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Data.List (nub)
 import qualified Data.Map as M
-import Maybes (isNothing)
+import Maybes (catMaybes, isNothing)
 import Parser.AbsLatte as Abs
 import Src.Frontend.CheckStmts (checkStmts)
 import Src.Frontend.Types as Types
@@ -71,9 +71,17 @@ checkSingleFunction env (FnDef pos t (Ident ident) args (Block _ stmts)) = do
   unless
     (checkIfFunctionArgsHaveUniqueNames args)
     (throwError $ NameAlreadyExistsInScopeError pos "args") -- TODO: add proper msg
-  (_, t) <- local (const env) (checkStmts stmts)
+  (_, retTypes) <- local (const env) (checkStmts stmts)
+
+  let filteredRetTypes = nub $ catMaybes $ map get ts
+        where
+          ts = if all isConditionalReturn retTypes then Return (Just Types.Void) : retTypes else retTypes
   when
-    (ident == "main" && t /= Types.Int)
+    (length filteredRetTypes /= 1)
+    (liftIO (print stmts >> print filteredRetTypes) >> throwError DifferentReturnTypes) -- TODO add pos info
+  let
+  when
+    (stripPositionFromType t /= head filteredRetTypes)
     (throwError $ MainFunctionMustReturnInt pos)
 
 checkFunctions :: TEnv -> [TopDef] -> StaticCheck ()

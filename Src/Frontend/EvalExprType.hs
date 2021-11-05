@@ -47,7 +47,6 @@ evalExprType (EApp pos (Ident ident) exprs) = do
   when
     (isNothing maybeFunT)
     (throwError $ UseOfUndeclaredName pos ident)
-  liftIO $ print maybeFunT
   let Just (Fun retT argTypes) = maybeFunT
 
   -- reject if argument types don't match function type

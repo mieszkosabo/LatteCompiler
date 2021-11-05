@@ -9,7 +9,22 @@ type VarName = String
 
 type Pos = Abs.BNFC'Position
 
-type ReturnedType = Maybe LatteType
+-- RETURNED TYPE
+data ReturnedType' a = ConditionalReturn a | Return a deriving (Show, Eq)
+
+type ReturnedType = ReturnedType' (Maybe LatteType)
+
+conditionalReturn :: ReturnedType -> ReturnedType
+conditionalReturn (Return t) = ConditionalReturn t
+conditionalReturn (ConditionalReturn t) = ConditionalReturn t
+
+get :: ReturnedType -> Maybe LatteType
+get (Return t) = t
+get (ConditionalReturn t) = t
+
+isConditionalReturn :: ReturnedType -> Bool
+isConditionalReturn (ConditionalReturn _) = True
+isConditionalReturn _ = False
 
 data TypeCheckErrors
   = UseOfUndeclaredName Pos String
@@ -40,6 +55,8 @@ instance Show TypeCheckErrors where
   show (OtherError pos msg) = msg ++ addPositionInfo pos
 
 type TEnv = Map VarName LatteType
+
+type LocalScope = [VarName]
 
 type StaticCheck = ReaderT TEnv (ExceptT TypeCheckErrors IO)
 
