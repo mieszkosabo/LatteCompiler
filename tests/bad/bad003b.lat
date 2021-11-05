@@ -1,0 +1,4 @@
+// no main function
+int f(int x) {
+   return x;
+}

@@ -1,0 +1,5 @@
+// Main must return int
+
+boolean main () {
+ return 0;
+}

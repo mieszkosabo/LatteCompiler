@@ -1,0 +1,11 @@
+int f(int x) {
+   return x;
+}
+
+boolean f(boolean x) {
+   return x;
+}
+
+int main() {
+    return 0;
+}

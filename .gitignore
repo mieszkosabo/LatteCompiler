@@ -1,0 +1,11 @@
+*.hi
+*.o
+*.out
+*.class
+.DS_Store
+insc_jvm
+insc_llvm
+*.j
+*.ll
+!lib/runtime.ll
+*.bc
