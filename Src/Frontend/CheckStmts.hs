@@ -53,10 +53,6 @@ checkStmts :: [Stmt] -> StaticCheck (TEnv, [ReturnedType])
 checkStmts stmts = do
   env <- ask
   (env', retTypes, lc) <- foldM f (env, [], []) stmts
-  let filteredRetTypes = normalizeReturnedTypes retTypes
-  when
-    (length filteredRetTypes > 1)
-    (throwError DifferentReturnTypes) -- TODO add pos info
   return (env', retTypes)
   where
     f = \(env, accTypes, localScope) stmt -> do

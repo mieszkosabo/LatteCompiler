@@ -9,18 +9,18 @@ type VarName = String
 
 type Pos = Abs.BNFC'Position
 
--- RETURNED TYPE
+-- ReturnedType type is useful for determining the final type of some statements
+-- that have if clauses with returns inside
 data ReturnedType' a = ConditionalReturn a | Return a deriving (Show, Eq)
 
 type ReturnedType = ReturnedType' (Maybe LatteType)
 
 conditionalReturn :: ReturnedType -> ReturnedType
 conditionalReturn (Return t) = ConditionalReturn t
-conditionalReturn (ConditionalReturn t) = ConditionalReturn t
+conditionalReturn t = t
 
 normalReturn :: ReturnedType -> ReturnedType
-normalReturn (Return t) = Return t
-normalReturn (ConditionalReturn t) = ConditionalReturn t
+normalReturn = id
 
 get :: ReturnedType -> Maybe LatteType
 get (Return t) = t
@@ -39,7 +39,7 @@ data TypeCheckErrors
   | NameAlreadyExistsInScopeError Pos String
   | MainFunctionTakesArgumentsError Pos
   | MainFunctionMustReturnInt Pos
-  | DifferentReturnTypes
+  | DifferentReturnTypes Pos
   | FunctionArgumentModification Pos
   | OtherError Pos String
 
@@ -51,7 +51,7 @@ instance Show TypeCheckErrors where
   show (UseOfUndeclaredName pos name) = "Undeclared name: " ++ name ++ addPositionInfo pos
   show (TypeAssertFailed pos t1 t2) = "Expected type: " ++ t1 ++ ", but got: " ++ t2 ++ addPositionInfo pos
   show (ReturnTypeVary pos t1 t2) = "Unexpected return type. Expected: " ++ t1 ++ ", but got: " ++ t2 ++ addPositionInfo pos
-  show DifferentReturnTypes = "Function returns different types"
+  show (DifferentReturnTypes pos) = "Function returns different types" ++ addPositionInfo pos
   show (FunctionApplicationError pos msg) = "Error in function application: " ++ msg ++ addPositionInfo pos
   show NoMainFunctionError = "Could not find `main` function."
   show (NameAlreadyExistsInScopeError pos name) = "Name " ++ name ++ " is already occupied by other variable in scope" ++ addPositionInfo pos
@@ -60,6 +60,7 @@ instance Show TypeCheckErrors where
   show (OtherError pos msg) = msg ++ addPositionInfo pos
   show (FunctionArgumentModification pos) = "Attempted to modify function argument " ++ addPositionInfo pos
 
+-- atm isMutable flag isn't much utilized, but might become handy when I add `const` modifier
 type TEnv = Map VarName (LatteType, Bool) -- (type, isMutable)
 
 type LocalScope = [VarName]
@@ -68,6 +69,7 @@ type StaticCheck = ReaderT TEnv (ExceptT TypeCheckErrors IO)
 
 data LatteType = Int | Str | Bool | Void | Fun LatteType [LatteType] deriving (Show, Eq)
 
+-- build in functions types
 printIntType :: LatteType
 printIntType = Fun Void [Int]
 
