@@ -10,20 +10,23 @@ import Parser.AbsLatte as Abs
 import Src.Frontend.EvalExprType (evalExprType)
 import Src.Frontend.Types as Types
 
--- TODO: current scope
-addItemToEnv :: LocalScope -> LatteType -> Item -> StaticCheck (TEnv, LocalScope)
-addItemToEnv localScope t item = do
+addIdentToEnv :: LocalScope -> LatteType -> VarName -> Bool -> StaticCheck (TEnv, LocalScope)
+addIdentToEnv localScope t ident isMutable = do
   env <- ask
+  return (M.insert ident (t, isMutable) env, ident : localScope)
+
+addItemToEnv :: LocalScope -> LatteType -> Item -> Bool -> StaticCheck (TEnv, LocalScope)
+addItemToEnv localScope t item isMutable = do
   checkItem localScope t item
   case item of
-    NoInit _ (Ident ident) -> return (M.insert ident t env, ident : localScope)
-    Init _ (Ident ident) _ -> return (M.insert ident t env, ident : localScope)
+    NoInit _ (Ident ident) -> addIdentToEnv localScope t ident isMutable
+    Init _ (Ident ident) _ -> addIdentToEnv localScope t ident isMutable
 
-addItemsToEnv :: LatteType -> TEnv -> LocalScope -> [Item] -> StaticCheck (TEnv, LocalScope)
-addItemsToEnv t env localScope items = do
-  foldM f (env, localScope) items
+addItemsToEnv :: LatteType -> TEnv -> LocalScope -> [Item] -> [Bool] -> StaticCheck (TEnv, LocalScope)
+addItemsToEnv t env localScope items areMutable = do
+  foldM f (env, localScope) $ zip items areMutable
   where
-    f = \(env, localScope) item -> local (const env) $ addItemToEnv localScope t item
+    f = \(env, localScope) (item, isMutable) -> local (const env) $ addItemToEnv localScope t item isMutable
 
 checkItem :: LocalScope -> LatteType -> Item -> StaticCheck ()
 checkItem localScope _ (NoInit pos (Ident ident)) = do
@@ -66,28 +69,31 @@ checkStmt (BStmt _ (Block _ stmts)) ls = do
 checkStmt (Decl pos t items) ls = do
   env <- ask
   let latteType = stripPositionFromType t
-  (env', ls') <- addItemsToEnv latteType env ls items
+  (env', ls') <- addItemsToEnv latteType env ls items $ repeat True
   return (env', [Return Nothing], ls')
 checkStmt (Ass pos (Ident ident) e) ls = do
   env <- ask
   let maybeT = M.lookup ident env
   when (isNothing maybeT) (throwError $ UseOfUndeclaredName pos ident)
-  let Just t = maybeT
+  let Just (t, isMutable) = maybeT
   exprType <- evalExprType e
   when (exprType /= t) (throwError $ TypeAssertFailed pos (show t) (show exprType))
+  unless isMutable (throwError $ FunctionArgumentModification pos)
   return (env, [Return Nothing], ls)
 checkStmt (Incr pos (Ident ident)) ls = do
   env <- ask
   case M.lookup ident env of
-    Just Types.Int -> return (env, [Return Nothing], ls)
+    Just (_, False) -> throwError $ FunctionArgumentModification pos
+    Just (Types.Int, _) -> return (env, [Return Nothing], ls)
     Nothing -> throwError $ UseOfUndeclaredName pos ident
-    Just otherType -> throwError $ TypeAssertFailed pos (show Types.Int) (show otherType)
+    Just (otherType, _) -> throwError $ TypeAssertFailed pos (show Types.Int) (show otherType)
 checkStmt (Decr pos (Ident ident)) ls = do
   env <- ask
   case M.lookup ident env of
-    Just Types.Int -> return (env, [Return Nothing], ls)
+    Just (_, False) -> throwError $ FunctionArgumentModification pos
+    Just (Types.Int, _) -> return (env, [Return Nothing], ls)
     Nothing -> throwError $ UseOfUndeclaredName pos ident
-    Just otherType -> throwError $ TypeAssertFailed pos (show Types.Int) (show otherType)
+    Just (otherType, _) -> throwError $ TypeAssertFailed pos (show Types.Int) (show otherType)
 checkStmt (Ret pos e) ls = do
   t <- evalExprType e
   env <- ask

@@ -21,7 +21,7 @@ addTopLevelDef topdef = do
   case M.lookup ident env of
     Nothing -> do
       let funT = Types.Fun (Types.stripPositionFromType t) (map (\(Arg _ t _) -> Types.stripPositionFromType t) args)
-      let env' = M.insert ident funT env
+      let env' = M.insert ident (funT, False) env
       return env'
     Just _ -> throwError (NameAlreadyExistsInScopeError pos ident)
 
@@ -31,13 +31,19 @@ addTopLevelDefs topdefs = do
   where
     f = \env topdef -> local (const env) $ addTopLevelDef topdef
 
-addPredefinedFunctions :: TEnv -> StaticCheck TEnv
+addPredefinedFunctions :: TEnv -> TEnv
 addPredefinedFunctions env =
-  return $
-    foldr
-      (\(ident, t) env -> M.insert ident t env)
-      env
-      Types.predefinedFunctionsTypes
+  foldr
+    (\(ident, t) env -> M.insert ident (t, False) env)
+    env
+    Types.predefinedFunctionsTypes
+
+addFunctionArgumentsToEnv :: TEnv -> [Arg] -> TEnv
+addFunctionArgumentsToEnv =
+  foldr
+    ( (\(ident, t) env -> M.insert ident (t, False) env)
+        . (\(Arg _ t (Ident ident)) -> (ident, stripPositionFromType t))
+    )
 
 -- check if specifications that are special to main func are matched:
 -- main func must be of type int, and take no args
@@ -71,7 +77,8 @@ checkSingleFunction env (FnDef pos t (Ident ident) args (Block _ stmts)) = do
   unless
     (checkIfFunctionArgsHaveUniqueNames args)
     (throwError $ NameAlreadyExistsInScopeError pos "args") -- TODO: add proper msg
-  (_, retTypes) <- local (const env) (checkStmts stmts)
+  let envWithFunctionArgs = addFunctionArgumentsToEnv env args
+  (_, retTypes) <- local (const envWithFunctionArgs) (checkStmts stmts)
 
   let filteredRetTypes = nub $ catMaybes $ map get ts
         where
@@ -79,7 +86,6 @@ checkSingleFunction env (FnDef pos t (Ident ident) args (Block _ stmts)) = do
   when
     (length filteredRetTypes /= 1)
     (liftIO (print stmts >> print filteredRetTypes) >> throwError DifferentReturnTypes) -- TODO add pos info
-  let
   when
     (stripPositionFromType t /= head filteredRetTypes)
     (throwError $ MainFunctionMustReturnInt pos)
@@ -90,9 +96,10 @@ checkFunctions env topdefs = forM_ topdefs (checkSingleFunction env)
 checkProgram :: Program -> StaticCheck ()
 checkProgram program = do
   let (Program _ topdefs) = program
-  env <- addTopLevelDefs topdefs >>= addPredefinedFunctions
-  checkIfMainFunctionExits env
-  checkFunctions env topdefs
+  env <- addTopLevelDefs topdefs
+  let env' = addPredefinedFunctions env
+  checkIfMainFunctionExits env'
+  checkFunctions env' topdefs
   return ()
 
 runStaticCheck :: Program -> IO (Either TypeCheckErrors ())

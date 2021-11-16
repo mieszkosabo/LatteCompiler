@@ -13,7 +13,7 @@ evalExprType (EVar pos (Ident ident)) = do
   let maybeT = M.lookup ident env
   case maybeT of
     Nothing -> throwError $ UseOfUndeclaredName pos ident
-    Just t -> return t
+    Just (t, isMutable) -> return t
 evalExprType (ELitInt _ _) = return Int
 evalExprType (ELitTrue _) = return Bool
 evalExprType (ELitFalse _) = return Bool
@@ -47,7 +47,7 @@ evalExprType (EApp pos (Ident ident) exprs) = do
   when
     (isNothing maybeFunT)
     (throwError $ UseOfUndeclaredName pos ident)
-  let Just (Fun retT argTypes) = maybeFunT
+  let Just (Fun retT argTypes, _) = maybeFunT
 
   -- reject if argument types don't match function type
   exprsTypes <- mapM evalExprType exprs

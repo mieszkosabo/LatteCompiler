@@ -36,6 +36,7 @@ data TypeCheckErrors
   | MainFunctionTakesArgumentsError Pos
   | MainFunctionMustReturnInt Pos
   | DifferentReturnTypes
+  | FunctionArgumentModification Pos
   | OtherError Pos String
 
 addPositionInfo :: Pos -> String
@@ -53,8 +54,9 @@ instance Show TypeCheckErrors where
   show (MainFunctionTakesArgumentsError pos) = "Main function can't take arguments" ++ addPositionInfo pos
   show (MainFunctionMustReturnInt pos) = "Main function must return int" ++ addPositionInfo pos
   show (OtherError pos msg) = msg ++ addPositionInfo pos
+  show (FunctionArgumentModification pos) = "Attempted to modify function argument " ++ addPositionInfo pos
 
-type TEnv = Map VarName LatteType
+type TEnv = Map VarName (LatteType, Bool) -- (type, isMutable)
 
 type LocalScope = [VarName]
 
