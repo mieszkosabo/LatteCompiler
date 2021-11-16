@@ -6,7 +6,7 @@ import Data.List (nub)
 import qualified Data.Map as M
 import Maybes (catMaybes, isNothing)
 import Parser.AbsLatte as Abs
-import Src.Frontend.CheckStmts (checkStmts)
+import Src.Frontend.CheckStmts (checkStmts, normalizeReturnedTypes)
 import Src.Frontend.Types as Types
 
 -- add all top level funcs to env, their names must be unique
@@ -41,7 +41,7 @@ addPredefinedFunctions env =
 addFunctionArgumentsToEnv :: TEnv -> [Arg] -> TEnv
 addFunctionArgumentsToEnv =
   foldr
-    ( (\(ident, t) env -> M.insert ident (t, False) env)
+    ( (\(ident, t) env -> M.insert ident (t, True) env)
         . (\(Arg _ t (Ident ident)) -> (ident, stripPositionFromType t))
     )
 
@@ -80,7 +80,7 @@ checkSingleFunction env (FnDef pos t (Ident ident) args (Block _ stmts)) = do
   let envWithFunctionArgs = addFunctionArgumentsToEnv env args
   (_, retTypes) <- local (const envWithFunctionArgs) (checkStmts stmts)
 
-  let filteredRetTypes = nub $ catMaybes $ map get ts
+  let filteredRetTypes = normalizeReturnedTypes ts
         where
           ts = if all isConditionalReturn retTypes then Return (Just Types.Void) : retTypes else retTypes
   when

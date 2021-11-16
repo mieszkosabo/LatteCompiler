@@ -33,7 +33,10 @@ evalExprType (EMul pos e op e') = do
   return Int
 evalExprType (EAdd pos e op e') = checkIfBothExprsAreOfTheSameType [Int, Str] e e' pos
 evalExprType (ERel pos e op e') = do
-  checkIfBothExprsAreOfTheSameType [Int] e e' pos
+  case op of
+    EQU ma -> checkIfBothExprsAreOfTheSameType [Int, Str, Bool] e e' pos
+    NE ma -> checkIfBothExprsAreOfTheSameType [Int, Str, Bool] e e' pos
+    _ -> checkIfBothExprsAreOfTheSameType [Int] e e' pos
   return Bool
 evalExprType (EAnd pos e e') = do
   checkIfBothExprsAreOfTheSameType [Bool] e e' pos

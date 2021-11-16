@@ -44,14 +44,19 @@ checkItem localScope t (Init pos (Ident ident) e) = do
     (exprType /= t)
     (throwError $ TypeAssertFailed pos (show t) (show exprType))
 
+normalizeReturnedTypes :: [ReturnedType] -> [LatteType]
+normalizeReturnedTypes ts = if null filtered then [Types.Void] else filtered
+  where
+    filtered = nub $ catMaybes $ map get ts
+
 checkStmts :: [Stmt] -> StaticCheck (TEnv, [ReturnedType])
 checkStmts stmts = do
   env <- ask
   (env', retTypes, lc) <- foldM f (env, [], []) stmts
-  let filteredRetTypes = nub $ catMaybes $ map get retTypes
+  let filteredRetTypes = normalizeReturnedTypes retTypes
   when
     (length filteredRetTypes > 1)
-    (liftIO (print stmts >> print filteredRetTypes) >> throwError DifferentReturnTypes) -- TODO add pos info
+    (throwError DifferentReturnTypes) -- TODO add pos info
   return (env', retTypes)
   where
     f = \(env, accTypes, localScope) stmt -> do
@@ -106,17 +111,24 @@ checkStmt (Cond pos e stmt) ls = do
   when (t /= Types.Bool) (throwError $ TypeAssertFailed pos (show Types.Bool) (show t))
   (_, retType, _) <- checkStmt stmt []
   env <- ask
-  return (env, map conditionalReturn retType, ls)
+  case e of
+    ELitTrue _ -> return (env, retType, ls)
+    ELitFalse _ -> return (env, [], ls)
+    _ -> return (env, map conditionalReturn retType, ls)
 checkStmt (CondElse pos e stmt elseStmt) ls = do
   t <- evalExprType e
   when (t /= Types.Bool) (throwError $ TypeAssertFailed pos (show Types.Bool) (show t))
   (_, retType, _) <- checkStmt stmt []
   (_, retType', _) <- checkStmt elseStmt []
-  when
-    (retType /= retType')
-    (throwError $ ReturnTypeVary pos (show retType) (show retType'))
   env <- ask
-  return (env, map conditionalReturn retType, ls)
+  case e of
+    ELitTrue _ -> return (env, retType, ls)
+    ELitFalse _ -> return (env, retType', ls)
+    _ -> do
+      when
+        (normalizeReturnedTypes retType /= normalizeReturnedTypes retType')
+        (throwError $ ReturnTypeVary pos (show retType) (show retType'))
+      return (env, map normalReturn retType, ls)
 checkStmt (While pos e stmt) ls = do
   t <- evalExprType e
   when

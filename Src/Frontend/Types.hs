@@ -18,6 +18,10 @@ conditionalReturn :: ReturnedType -> ReturnedType
 conditionalReturn (Return t) = ConditionalReturn t
 conditionalReturn (ConditionalReturn t) = ConditionalReturn t
 
+normalReturn :: ReturnedType -> ReturnedType
+normalReturn (Return t) = Return t
+normalReturn (ConditionalReturn t) = ConditionalReturn t
+
 get :: ReturnedType -> Maybe LatteType
 get (Return t) = t
 get (ConditionalReturn t) = t
@@ -47,7 +51,7 @@ instance Show TypeCheckErrors where
   show (UseOfUndeclaredName pos name) = "Undeclared name: " ++ name ++ addPositionInfo pos
   show (TypeAssertFailed pos t1 t2) = "Expected type: " ++ t1 ++ ", but got: " ++ t2 ++ addPositionInfo pos
   show (ReturnTypeVary pos t1 t2) = "Unexpected return type. Expected: " ++ t1 ++ ", but got: " ++ t2 ++ addPositionInfo pos
-  show (DifferentReturnTypes) = "Function returns different types"
+  show DifferentReturnTypes = "Function returns different types"
   show (FunctionApplicationError pos msg) = "Error in function application: " ++ msg ++ addPositionInfo pos
   show NoMainFunctionError = "Could not find `main` function."
   show (NameAlreadyExistsInScopeError pos name) = "Name " ++ name ++ " is already occupied by other variable in scope" ++ addPositionInfo pos
