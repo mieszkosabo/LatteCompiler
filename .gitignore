@@ -10,3 +10,4 @@ insc_llvm
 !lib/runtime.ll
 *.bc
 latc
+*.tar

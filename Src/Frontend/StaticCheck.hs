@@ -4,7 +4,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Data.List (nub)
 import qualified Data.Map as M
-import Maybes (catMaybes, isNothing)
+import Data.Maybe (catMaybes, isNothing)
 import Parser.AbsLatte as Abs
 import Src.Frontend.CheckStmts (checkStmts, normalizeReturnedTypes)
 import Src.Frontend.Types as Types

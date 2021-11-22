@@ -5,7 +5,6 @@ import Control.Monad.Reader
 import Data.List (nub)
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, isJust, isNothing)
-import Maybes (isNothing)
 import Parser.AbsLatte as Abs
 import Src.Frontend.EvalExprType (evalExprType)
 import Src.Frontend.Types as Types
