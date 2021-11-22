@@ -9,3 +9,4 @@ insc_llvm
 *.ll
 !lib/runtime.ll
 *.bc
+latc
