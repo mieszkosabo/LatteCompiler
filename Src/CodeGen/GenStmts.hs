@@ -1,10 +1,15 @@
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+
 module Src.CodeGen.GenStmts where
 
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.List (intercalate)
+import qualified Data.Map as M
 import Parser.AbsLatte
-import Src.CodeGen.GenExpr (genExpr)
+import Src.CodeGen.GenExpr (emitBinaryOp, genExpr)
 import Src.CodeGen.State
+import Src.CodeGen.Utils
 
 foldEnv :: (a -> GenM Env) -> [a] -> GenM Env
 foldEnv fun l = do
@@ -26,6 +31,47 @@ genStmt (Ret _ e) = do
   emit $ "\tret i32 " ++ show addr
   ask
 genStmt (VRet _) = emit "\tret void" >> ask
+genStmt (Ass _ (Ident ident) e) = do
+  addr <- genExpr e
+  setVar ident addr
+  ask
+genStmt (CondElse _ e thenSt elseSt) = do
+  env <- ask
+  ifLabel <- freshLabel
+  elseLabel <- freshLabel
+  finLabel <- freshLabel
+  cond <- genExpr e
+  emit $ branch cond ifLabel elseLabel
+  entryStore <- gets store
+
+  emit $ placeLabel ifLabel
+  genStmt thenSt
+  emit $ goto finLabel
+
+  ifStore <- gets store
+  modify (\s -> s {store = entryStore}) -- restore entry state before going into elseStmt
+  emit $ placeLabel elseLabel
+  genStmt elseSt
+  emit $ goto finLabel
+  elseStore <- gets store
+
+  emit $ placeLabel finLabel
+  modify (\s -> s {store = entryStore})
+  createPhiNodes [(ifLabel, ifStore), (elseLabel, elseStore)]
+  return env
+genStmt (Cond pos e thenStmt) = genStmt (CondElse pos e thenStmt (Empty pos)) -- `if` is like `if else` just with empty else
+genStmt (Incr _ (Ident ident)) = do
+  addr <- getVar ident
+  addr' <- emitBinaryOp "add i32" addr (Literal 1)
+  setVar ident addr'
+  ask
+genStmt (Decr _ (Ident ident)) = do
+  addr <- getVar ident
+  addr' <- emitBinaryOp "sub i32" addr (Literal 1)
+  setVar ident addr'
+  ask
+
+--     | While a (Expr' a) (Stmt' a)
 
 declareItem :: Item -> GenM Env
 declareItem (NoInit _ (Ident ident)) = do

@@ -81,9 +81,16 @@ getVar :: VarName -> GenM Address
 getVar ident = do
   env <- ask
   st <- get
-  let (Just loc) = M.lookup ident env
-  let (Just addr) = M.lookup loc (store st)
+  let loc = env M.! ident
+  let addr = store st M.! loc
   return addr
+
+setVar :: VarName -> Address -> GenM ()
+setVar ident addr = do
+  env <- ask
+  st <- get
+  let (Just loc) = M.lookup ident env
+  modify (\s -> s {store = M.insert loc addr (store s)})
 
 declareVar :: VarName -> Either Int Address -> GenM (Address, Env)
 declareVar ident initialValue = do

@@ -1,10 +1,10 @@
 int main() {
-    int a = 42;
+    int a = 99;
     int b = 1;
     int c = a + b;
     printInt(c);
-    int d = add(b, 99, true);
-    printer(d);
+    c--;
+    printer(c);
     return 0;
 }
 
