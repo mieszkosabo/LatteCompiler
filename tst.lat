@@ -1,0 +1,17 @@
+int main() {
+    int a = 42;
+    int b = 1;
+    int c = a + b;
+    printInt(c);
+    int d = add(b, 99);
+    printer(d);
+    return 0;
+}
+
+int add(int a, int b) {
+    return a + b;
+}
+
+void printer(int a) {
+    printInt(a);
+}

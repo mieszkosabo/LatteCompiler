@@ -67,7 +67,14 @@ type LocalScope = [VarName]
 
 type StaticCheck = ReaderT TEnv (ExceptT TypeCheckErrors IO)
 
-data LatteType = Int | Str | Bool | Void | Fun LatteType [LatteType] deriving (Show, Eq)
+data LatteType = Int | Str | Bool | Void | Fun LatteType [LatteType] deriving (Eq)
+
+instance Show LatteType where
+  show Int = "i32"
+  show Str = "i8*"
+  show Bool = "i1"
+  show Void = "void"
+  show (Fun t ts) = show t ++ " (" ++ concatMap show ts ++ ")"
 
 -- build in functions types
 printIntType :: LatteType

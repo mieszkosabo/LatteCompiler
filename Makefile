@@ -24,8 +24,11 @@ Parser/AbsLatte.hs Parser/LexLatte.x Parser/ParLatte.y Parser/PrintLatte.hs Pars
 %.hs : %.x
 	${ALEX} ${ALEX_OPTS} $<
 
-latc: Parser/AbsLatte.hs Parser/ParLatte.hs Parser/LexLatte.hs Src/Main.hs Src/Frontend/*.hs
+latc: lib/runtime.bc Parser/AbsLatte.hs Parser/ParLatte.hs Parser/LexLatte.hs Src/Main.hs Src/Frontend/*.hs Src/CodeGen/*
 	${GHC} -o latc Src/Main.hs
+
+lib/runtime.bc: lib/runtime.ll
+	llvm-as $<
 
 # Rules for cleaning generated files.
 
