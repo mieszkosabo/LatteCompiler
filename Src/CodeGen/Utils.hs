@@ -14,7 +14,7 @@ argsTypes ((Arg _ t _) : as) = show (stripPositionFromType t) : argsTypes as
 addArgsToEnv :: [Arg] -> GenM ([Address], Env)
 addArgsToEnv args = do
   env <- ask
-  foldM f ([], env) args
+  foldM f ([], env) $ reverse args
   where
     f = \(addresses, env) (Arg _ t (Ident ident)) -> local (const env) $ fun addresses ident -- (b -> a -> m b)
     fun = \addresses ident -> do

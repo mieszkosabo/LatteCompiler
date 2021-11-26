@@ -7,6 +7,7 @@ import qualified Data.Map as M
 import Parser.AbsLatte
 import Src.CodeGen.GenStmts
 import Src.CodeGen.State
+import Src.CodeGen.State (addStringLiteralsDefinitions)
 import Src.CodeGen.Utils
 import Src.Frontend.Types (stripPositionFromType)
 import qualified Src.Frontend.Types as Types
@@ -16,7 +17,10 @@ genCode :: [TopDef] -> GenM ()
 genCode topdefs = do
   addTopLevelDefs topdefs
   addPredefinedFunctions
+  addInternalFunctions
   genCode' topdefs
+  st <- get
+  addStringLiteralsDefinitions $ reverse $ stringLiterals st
 
 genCode' :: [TopDef] -> GenM ()
 genCode' [] = emit ""
@@ -28,7 +32,7 @@ genCode' (f : fs) = do
   let argString = createArgString types addresses
   emit $ concat ["define ", show ty, " @", ident, "(", argString, ")", "{"]
   emit "\tentry: "
-  local (const env) $ genStmts stmts -- TODO: sprawdzić czy jest return na końcu
+  local (const env) $ genStmts stmts
   st <- get
   when
     (isImplicitReturn st)
@@ -56,3 +60,7 @@ addPredefinedFunctions =
         emit $ concat ["declare ", show funType, " @", ident, "(", argsString, ")"]
     )
     Types.predefinedFunctionsTypes
+
+addInternalFunctions :: GenM ()
+addInternalFunctions = do
+  emit "declare i8* @__concat(i8*, i8*)"

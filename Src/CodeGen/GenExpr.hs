@@ -6,24 +6,29 @@ import Src.CodeGen.State
 import Data.List (intercalate)
 import qualified Data.Map as M
 import qualified Src.Frontend.Types as T
-
+import Src.CodeGen.Utils (createArgString)
 
 genExpr :: Expr -> GenM Address
 genExpr (ELitInt _ n) = return $ Literal $ fromInteger n
 genExpr (EVar _ (Ident ident)) = getVar ident
-    -- | ELitTrue a
-    -- | ELitFalse a
+genExpr (ELitTrue _) = return $ Literal 1
+genExpr (ELitFalse _) = return $ Literal 0
 genExpr (EApp _ (Ident ident) exprs) = do
     temp <- genTemp
     args <- mapM genExpr exprs
     st <- get
     let Just (T.Fun t ts) = M.lookup ident (functionTypes st)
-    let argsString = intercalate ", " (map (\a -> "i32 " ++ show a) args) -- FIXME: handle different types
+    let types = map show ts
+    let argsString = createArgString types args
     case t of
         T.Void -> emit $ concat ["\tcall void @", ident, "(", argsString, ")" ] 
         _ -> emit $ concat ["\t", show temp, " = call ", show t ++ " @", ident, "(", argsString, ")"]
     return temp
-    -- | EString a String
+genExpr (EString _ str) = do
+    id <- saveStringLiteral str
+    addr <- genStrAddr
+    emit $ concat ["\t", show addr, " = bitcast [", show (length str + 1), " x i8]* ", id, " to i8*"]
+    return addr
     -- | Not a (Expr' a)
 genExpr (Neg _ e) = undefined -- TODO:
 genExpr (EAdd _ e op e') = genBinaryOp (addOpToLLVM op) e e'
@@ -34,7 +39,7 @@ genExpr (EMul _ e op e') = genBinaryOp (mulOpToLLVM op) e e'
 
 addOpToLLVM :: AddOp -> String
 addOpToLLVM (Plus _) = "add i32"
-addOpToLLVM (Minus _) = "add i32"
+addOpToLLVM (Minus _) = "sub i32"
 
 relOpToLLVM :: RelOp -> String
 relOpToLLVM (LTH _) = "slt"
@@ -53,6 +58,14 @@ genBinaryOp :: String -> Expr -> Expr -> GenM Address
 genBinaryOp op e e' = do
     addr <- genExpr e
     addr' <- genExpr e'
+    emitBinaryOp op addr addr'
+
+emitBinaryOp :: String -> Address -> Address -> GenM Address
+emitBinaryOp "add i32" a@(StrAddr i) a'@(StrAddr i') = do -- addition op overloaded for concatenating strings
+    strAddr <- genStrAddr
+    emit $ concat ["\t", show strAddr, " = call i8* @__concat(i8* ", show a, ", i8* ", show a', ")"]
+    return strAddr
+emitBinaryOp op a a' = do
     temp <- genTemp
-    emit $ concat ["\t", show temp, " = ", op, " ", show addr, ", ", show addr']
+    emit $ concat ["\t", show temp, " = ", op, " ", show a, ", ", show a']
     return temp

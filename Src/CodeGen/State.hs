@@ -19,11 +19,13 @@ data Address
   = Literal Int
   | Local Int
   | Temp Int
+  | StrAddr Int
 
 instance Show Address where
   show (Literal i) = show i
   show (Local i) = "%l" ++ show i
   show (Temp i) = "%t" ++ show i
+  show (StrAddr i) = "%s" ++ show i
 
 type Env = M.Map VarName Loc
 
@@ -33,9 +35,28 @@ data GenState = GenState
   { nextId :: Int,
     store :: Store,
     revCode :: Code,
-    functionTypes :: M.Map VarName LatteType
+    functionTypes :: M.Map VarName LatteType,
+    stringLiterals :: [StringLiteral]
   }
   deriving (Show)
+
+data StringLiteral = StringLiteral
+  { text :: String,
+    stringId :: String
+  }
+
+instance Show StringLiteral where
+  show sl = concat [stringId sl, " = private constant [", show $ length (text sl) + 1, " x i8] c", "\"", text sl, "\\00", "\""]
+
+saveStringLiteral :: String -> GenM String
+saveStringLiteral str = do
+  id <- fmap (\i -> "@s" ++ show i) freshId
+  let sl = StringLiteral {text = str, stringId = id}
+  modify (\s -> s {stringLiterals = sl : stringLiterals s})
+  return id
+
+addStringLiteralsDefinitions :: [StringLiteral] -> GenM ()
+addStringLiteralsDefinitions = mapM_ (emit . show)
 
 freshId :: GenM Int
 freshId = do
@@ -52,6 +73,9 @@ emit instr = modify (\s -> s {revCode = instr : revCode s})
 
 genTemp :: GenM Address
 genTemp = fmap Temp freshId
+
+genStrAddr :: GenM Address
+genStrAddr = fmap StrAddr freshId
 
 getVar :: VarName -> GenM Address
 getVar ident = do
@@ -80,7 +104,8 @@ initialState =
     { nextId = 1,
       store = M.empty,
       revCode = [],
-      functionTypes = M.empty
+      functionTypes = M.empty,
+      stringLiterals = []
     }
 
 runGen :: GenM a -> IO (a, GenState)
