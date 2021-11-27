@@ -6,7 +6,7 @@ import Src.CodeGen.State
 import Data.List (intercalate)
 import qualified Data.Map as M
 import qualified Src.Frontend.Types as T
-import Src.CodeGen.Utils (createArgString)
+import Src.CodeGen.Utils (createArgString, icmp)
 
 genExpr :: Expr -> GenM Address
 genExpr (ELitInt _ n) = return $ Literal $ fromInteger n
@@ -33,7 +33,7 @@ genExpr (EString _ str) = do
 -- genExpr (Neg _ e) = genBinaryOp "sub" (ELitInt )
 genExpr (EAdd _ e op e') = genBinaryOp (addOpToLLVM op) e e'
 genExpr (EMul _ e op e') = genBinaryOp (mulOpToLLVM op) e e'
-    -- | ERel a (Expr' a) (RelOp' a) (Expr' a)
+genExpr (ERel _ e op e') = genCmp (relOpToLLVM op) e e'
     -- | EAnd a (Expr' a) (Expr' a)
     -- | EOr a (Expr' a) (Expr' a)
 
@@ -53,6 +53,14 @@ mulOpToLLVM :: MulOp -> String
 mulOpToLLVM (Times _) = "mul i32"
 mulOpToLLVM (Div _) = "sdiv i32"
 mulOpToLLVM (Mod _) = "srem i32"
+
+genCmp :: String -> Expr -> Expr -> GenM Address
+genCmp comp e e'= do
+    addr <- genExpr e
+    addr' <- genExpr e'
+    temp <- genTemp
+    emit $ icmp comp temp addr addr'
+    return temp
 
 genBinaryOp :: String -> Expr -> Expr -> GenM Address
 genBinaryOp op e e' = do
