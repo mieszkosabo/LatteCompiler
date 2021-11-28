@@ -31,6 +31,7 @@ instance Show Address where
     where
       str = show a ++ "." ++ vn ++ "." ++ show l
 
+-- TODO: encode type in Address
 type Env = M.Map VarName Loc
 
 type Store = M.Map Loc Address
