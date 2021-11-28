@@ -31,7 +31,6 @@ genCode' (f : fs) = do
   let types = argsTypes args
   let argString = createArgString types addresses
   emit $ concat ["define ", show ty, " @", ident, "(", argString, ")", "{"]
-  -- emit "\tentry: "
   entryLabel <- freshLabel
   modify (\s -> s {lastLabel = entryLabel})
   emit $ placeLabel entryLabel

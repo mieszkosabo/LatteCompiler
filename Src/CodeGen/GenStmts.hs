@@ -47,7 +47,9 @@ genStmt (CondElse _ e thenSt elseSt) = do
   setLastLabel ifLabel
   genStmt thenSt
   lastIfLabel <- gets lastLabel
-  emit $ goto finLabel
+  st <- get
+  let ifReturns = isExplicitReturn st
+  unless ifReturns (emit $ goto finLabel)
   ifStore <- gets store
 
   -- else Block
@@ -56,16 +58,46 @@ genStmt (CondElse _ e thenSt elseSt) = do
   setLastLabel elseLabel
   genStmt elseSt
   lastElseLabel <- gets lastLabel
-  emit $ goto finLabel
+  st' <- get
+  let elseReturns = isExplicitReturn st'
+  unless elseReturns (emit $ goto finLabel)
   elseStore <- gets store
+
+  -- final block
+  unless
+    ifReturns -- in if/else if one branch returns then the other has to as well
+    ( do
+        emit $ placeLabel finLabel
+        restore entryStore
+        createPhiNodes finLabel [(lastIfLabel, ifStore), (lastElseLabel, elseStore)]
+        setLastLabel finLabel
+    )
+  return env
+genStmt (Cond pos e thenStmt) = do
+  env <- ask
+  ifLabel <- freshLabel
+  finLabel <- freshLabel
+  cond <- genExpr e
+  emit $ branch cond ifLabel finLabel
+  lastEntryLabel <- gets lastLabel
+  entryStore <- gets store
+
+  -- if block
+  emit $ placeLabel ifLabel
+  setLastLabel ifLabel
+  genStmt thenStmt
+  lastIfLabel <- gets lastLabel
+  st <- get
+  let ifReturns = isExplicitReturn st
+  unless ifReturns (emit $ goto finLabel)
+  ifStore <- gets store
 
   -- final block
   emit $ placeLabel finLabel
   restore entryStore
-  createPhiNodes finLabel [(lastIfLabel, ifStore), (lastElseLabel, elseStore)]
+  unless ifReturns (createPhiNodes finLabel [(lastIfLabel, ifStore), (lastEntryLabel, entryStore)])
   setLastLabel finLabel
   return env
-genStmt (Cond pos e thenStmt) = genStmt (CondElse pos e thenStmt (Empty pos)) -- `if` is like `if else` just with empty else
 genStmt (Incr _ (Ident ident)) = do
   addr <- getVar ident
   addr' <- emitBinaryOp "add i32" addr (Literal 1)

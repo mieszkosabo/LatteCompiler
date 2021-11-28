@@ -1,7 +1,0 @@
-int main() {
-    string a = "ziomek";
-    string b = "Yoo ";
-    string c = b + a;
-    printString(c);
-    return 0;
-}

@@ -30,7 +30,7 @@ genExpr (EString _ str) = do
     emit $ concat ["\t", show addr, " = bitcast [", show (length str + 1), " x i8]* ", id, " to i8*"]
     return addr
     -- | Not a (Expr' a)
--- genExpr (Neg _ e) = genBinaryOp "sub" (ELitInt )
+genExpr (Neg _ e) = genBinaryOp "sub i32" (ELitInt (Just (0,0)) 0) e
 genExpr (EAdd _ e op e') = genBinaryOp (addOpToLLVM op) e e'
 genExpr (EMul _ e op e') = genBinaryOp (mulOpToLLVM op) e e'
 genExpr (ERel _ e op e') = genCmp (relOpToLLVM op) e e'

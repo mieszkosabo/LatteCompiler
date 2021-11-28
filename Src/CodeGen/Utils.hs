@@ -30,7 +30,10 @@ createArgString :: [String] -> [Address] -> String
 createArgString types addresses = intercalate ", " $ zipWith (\t a -> t ++ " " ++ show a) types addresses
 
 isImplicitReturn :: GenState -> Bool
-isImplicitReturn st = not $ "\tret" `isPrefixOf` head (revCode st)
+isImplicitReturn = not . isExplicitReturn
+
+isExplicitReturn :: GenState -> Bool
+isExplicitReturn st = "\tret" `isPrefixOf` head (revCode st)
 
 placeLabel :: Label -> Instr
 placeLabel l = concat ["\tL", show l, ":"]
