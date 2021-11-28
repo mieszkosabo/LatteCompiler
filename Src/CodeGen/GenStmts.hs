@@ -44,20 +44,28 @@ genStmt (CondElse _ e thenSt elseSt) = do
   emit $ branch cond ifLabel elseLabel
   entryStore <- gets store
 
+  -- if block
   emit $ placeLabel ifLabel
+  modify (\s -> s {lastLabel = ifLabel})
   genStmt thenSt
+  lastIfLabel <- gets lastLabel
   emit $ goto finLabel
-
   ifStore <- gets store
+
+  -- else Block
   modify (\s -> s {store = entryStore}) -- restore entry state before going into elseStmt
   emit $ placeLabel elseLabel
+  modify (\s -> s {lastLabel = elseLabel})
   genStmt elseSt
+  lastElseLabel <- gets lastLabel
   emit $ goto finLabel
   elseStore <- gets store
 
+  -- final block
   emit $ placeLabel finLabel
   modify (\s -> s {store = entryStore})
-  createPhiNodes [(ifLabel, ifStore), (elseLabel, elseStore)]
+  createPhiNodes finLabel [(lastIfLabel, ifStore), (lastElseLabel, elseStore)]
+  modify (\s -> s {lastLabel = finLabel})
   return env
 genStmt (Cond pos e thenStmt) = genStmt (CondElse pos e thenStmt (Empty pos)) -- `if` is like `if else` just with empty else
 genStmt (Incr _ (Ident ident)) = do
@@ -71,7 +79,39 @@ genStmt (Decr _ (Ident ident)) = do
   setVar ident addr'
   ask
 
---     | While a (Expr' a) (Stmt' a)
+-- TODO: While, wrap all addresses in body store withLabel
+genStmt (While _ e bodyStmt) = do
+  env <- ask
+  condLabel <- freshLabel
+  bodyLabel <- freshLabel
+  finLabel <- freshLabel
+  lastEntryLabel <- gets lastLabel
+  emit $ goto condLabel
+  entryStore <- gets store
+
+  emit $ placeLabel bodyLabel
+  modify (\s -> s {lastLabel = bodyLabel})
+  -- rename vars
+  forM_
+    (M.keys env)
+    ( \varname -> do
+        a <- getVar varname
+        setVar varname (WithLabel varname condLabel a)
+    )
+  genStmt bodyStmt
+  lastBodyLabel <- gets lastLabel
+  emit $ goto condLabel
+  bodyStore <- gets store
+
+  emit $ placeLabel condLabel
+  modify (\s -> s {store = entryStore})
+  createPhiNodes condLabel [(lastBodyLabel, bodyStore), (lastEntryLabel, entryStore)]
+  cond <- genExpr e
+  emit $ branch cond bodyLabel finLabel
+
+  emit $ placeLabel finLabel
+  modify (\s -> s {lastLabel = finLabel})
+  return env
 
 declareItem :: Item -> GenM Env
 declareItem (NoInit _ (Ident ident)) = do

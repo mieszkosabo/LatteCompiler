@@ -3,6 +3,7 @@
 module Src.CodeGen.Utils where
 
 import Control.Monad.Reader
+import Control.Monad.State
 import Data.List (intercalate, isPrefixOf)
 import qualified Data.Map as M
 import Parser.AbsLatte
@@ -44,15 +45,16 @@ branch :: Address -> Label -> Label -> Instr
 branch a t e = unwords ["\tbr i1", show a, ",", useLabel t, ",", useLabel e]
 
 icmp :: String -> Address -> Address -> Address -> Instr
-icmp comp c a a' = concat ["\t", show c, " = icmp", comp, " i32 ", show a, ",", show a']
+icmp comp c a a' = concat ["\t", show c, " = icmp ", comp, " i32 ", show a, ",", show a']
 
-createPhiNodes :: [(Label, Store)] -> GenM ()
-createPhiNodes pairs = do
+createPhiNodes :: Label -> [(Label, Store)] -> GenM ()
+createPhiNodes currLabel pairs = do
   env <- ask
   mapM_ f $ M.toList env
   where
     f (varname, loc) = do
-      tmp <- genTemp
+      s <- gets store
+      let tmp = WithLabel varname currLabel (s M.! loc)
       let phiRhs = createPhiNode loc pairs
       emit $ concat ["\t", show tmp, " = phi i32 ", intercalate "," phiRhs]
       setVar varname tmp

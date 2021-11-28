@@ -1,16 +1,18 @@
 int main() {
     int x = 42;
-    int y = 1;
-    int z = 10;
+
+    //if (false) {
+    //    x = 88;
+    //}
 
     if (true) {
         x = 44;
-        int y = 3;
+        if (true) {
+           x = 45;
+        }
     }
 
     printInt(x);
-    printInt(y);
-    printInt(z);
     
     return 0;
 }

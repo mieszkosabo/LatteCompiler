@@ -20,12 +20,16 @@ data Address
   | Local Int
   | Temp Int
   | StrAddr Int
+  | WithLabel VarName Label Address
 
 instance Show Address where
   show (Literal i) = show i
   show (Local i) = "%l" ++ show i
   show (Temp i) = "%t" ++ show i
   show (StrAddr i) = "%s" ++ show i
+  show (WithLabel vn l a) = if head str /= '%' then "%wl" ++ str else str
+    where
+      str = show a ++ "." ++ vn ++ "." ++ show l
 
 type Env = M.Map VarName Loc
 
@@ -36,7 +40,8 @@ data GenState = GenState
     store :: Store,
     revCode :: Code,
     functionTypes :: M.Map VarName LatteType,
-    stringLiterals :: [StringLiteral]
+    stringLiterals :: [StringLiteral],
+    lastLabel :: Label
   }
   deriving (Show)
 
@@ -112,7 +117,8 @@ initialState =
       store = M.empty,
       revCode = [],
       functionTypes = M.empty,
-      stringLiterals = []
+      stringLiterals = [],
+      lastLabel = 1
     }
 
 runGen :: GenM a -> IO (a, GenState)

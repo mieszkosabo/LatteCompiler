@@ -1,0 +1,16 @@
+int main() {
+    int x = 0;
+    int i = 0;
+    if (true) {
+        while (i < 10) {
+            if (true) {
+                x = x + 2;
+            } else {
+                x++;
+            }
+            i++;
+        }
+    }
+    printInt(x);
+    return 0;
+}
