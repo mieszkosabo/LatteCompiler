@@ -64,3 +64,13 @@ createPhiNode _ [] = []
 createPhiNode loc ((l, s) : rest) = concat ["[ ", show addr, ", %L", show l, "]"] : createPhiNode loc rest
   where
     addr = s M.! loc
+
+wrapAllAddressesWithLabel :: Label -> GenM ()
+wrapAllAddressesWithLabel l = do
+  env <- ask
+  forM_
+    (M.keys env)
+    ( \varname -> do
+        a <- getVar varname
+        setVar varname (WithLabel varname l a)
+    )

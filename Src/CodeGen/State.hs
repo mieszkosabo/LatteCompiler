@@ -45,6 +45,12 @@ data GenState = GenState
   }
   deriving (Show)
 
+restore :: Store -> GenM ()
+restore st = modify (\s -> s {store = st})
+
+setLastLabel :: Label -> GenM ()
+setLastLabel l = modify (\s -> s {lastLabel = l})
+
 data StringLiteral = StringLiteral
   { text :: String,
     stringId :: String

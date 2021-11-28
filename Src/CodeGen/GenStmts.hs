@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-
 module Src.CodeGen.GenStmts where
 
 import Control.Monad.Reader
@@ -46,16 +44,16 @@ genStmt (CondElse _ e thenSt elseSt) = do
 
   -- if block
   emit $ placeLabel ifLabel
-  modify (\s -> s {lastLabel = ifLabel})
+  setLastLabel ifLabel
   genStmt thenSt
   lastIfLabel <- gets lastLabel
   emit $ goto finLabel
   ifStore <- gets store
 
   -- else Block
-  modify (\s -> s {store = entryStore}) -- restore entry state before going into elseStmt
+  restore entryStore
   emit $ placeLabel elseLabel
-  modify (\s -> s {lastLabel = elseLabel})
+  setLastLabel elseLabel
   genStmt elseSt
   lastElseLabel <- gets lastLabel
   emit $ goto finLabel
@@ -63,9 +61,9 @@ genStmt (CondElse _ e thenSt elseSt) = do
 
   -- final block
   emit $ placeLabel finLabel
-  modify (\s -> s {store = entryStore})
+  restore entryStore
   createPhiNodes finLabel [(lastIfLabel, ifStore), (lastElseLabel, elseStore)]
-  modify (\s -> s {lastLabel = finLabel})
+  setLastLabel finLabel
   return env
 genStmt (Cond pos e thenStmt) = genStmt (CondElse pos e thenStmt (Empty pos)) -- `if` is like `if else` just with empty else
 genStmt (Incr _ (Ident ident)) = do
@@ -78,39 +76,34 @@ genStmt (Decr _ (Ident ident)) = do
   addr' <- emitBinaryOp "sub i32" addr (Literal 1)
   setVar ident addr'
   ask
-
--- TODO: While, wrap all addresses in body store withLabel
 genStmt (While _ e bodyStmt) = do
   env <- ask
   condLabel <- freshLabel
   bodyLabel <- freshLabel
   finLabel <- freshLabel
   lastEntryLabel <- gets lastLabel
-  emit $ goto condLabel
   entryStore <- gets store
+  emit $ goto condLabel
 
+  -- body block
   emit $ placeLabel bodyLabel
-  modify (\s -> s {lastLabel = bodyLabel})
-  -- rename vars
-  forM_
-    (M.keys env)
-    ( \varname -> do
-        a <- getVar varname
-        setVar varname (WithLabel varname condLabel a)
-    )
+  setLastLabel bodyLabel
+  wrapAllAddressesWithLabel condLabel
   genStmt bodyStmt
   lastBodyLabel <- gets lastLabel
   emit $ goto condLabel
   bodyStore <- gets store
 
+  -- cond block
   emit $ placeLabel condLabel
-  modify (\s -> s {store = entryStore})
+  restore entryStore
   createPhiNodes condLabel [(lastBodyLabel, bodyStore), (lastEntryLabel, entryStore)]
   cond <- genExpr e
   emit $ branch cond bodyLabel finLabel
 
+  -- finalBlock
   emit $ placeLabel finLabel
-  modify (\s -> s {lastLabel = finLabel})
+  setLastLabel finLabel
   return env
 
 declareItem :: Item -> GenM Env
