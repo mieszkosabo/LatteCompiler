@@ -6,27 +6,30 @@ import qualified Data.Map as M
 import Parser.AbsLatte
 import Src.CodeGen.State
 import Src.CodeGen.Utils
-import qualified Src.Frontend.Types as T
+import qualified Src.Frontend.Types as Types
 
 genExpr :: Expr -> GenM Address
-genExpr (ELitInt _ n) = return $ Literal $ fromInteger n
+genExpr (ELitInt _ n) = return $ ImmediateInt $ fromInteger n
 genExpr (EVar _ (Ident ident)) = getVar ident
-genExpr (ELitTrue _) = return $ Literal 1
-genExpr (ELitFalse _) = return $ Literal 0
+genExpr (ELitTrue _) = return $ ImmediateBool 1
+genExpr (ELitFalse _) = return $ ImmediateBool 0
 genExpr (EApp _ (Ident ident) exprs) = do
-  temp <- genTemp
   args <- mapM genExpr exprs
   st <- get
-  let Just (T.Fun t ts) = M.lookup ident (functionTypes st)
+  let Just (Types.Fun t ts) = M.lookup ident (functionTypes st)
   let types = map show ts
   let argsString = createArgString types args
   case t of
-    T.Void -> emit $ concat ["\tcall void @", ident, "(", argsString, ")"]
-    _ -> emit $ concat ["\t", show temp, " = call ", show t ++ " @", ident, "(", argsString, ")"]
-  return temp
+    Types.Void -> do
+      emit $ concat ["\tcall void @", ident, "(", argsString, ")"]
+      return $ ImmediateInt 1
+    _ -> do
+      temp <- genAddr t
+      emit $ concat ["\t", show temp, " = call ", show t ++ " @", ident, "(", argsString, ")"]
+      return temp
 genExpr (EString _ str) = do
   id <- saveStringLiteral str
-  addr <- genStrAddr
+  addr <- genAddr Types.Str
   emit $ concat ["\t", show addr, " = bitcast [", show (length str + 1), " x i8]* ", id, " to i8*"]
   return addr
 genExpr (Not _ e) = do
@@ -40,7 +43,7 @@ genExpr (Not _ e) = do
   emit $ goto finLabel
 
   emit $ placeLabel finLabel
-  tmp <- genTemp
+  tmp <- genAddr Types.Bool
   emit $ concat ["\t", show tmp, " = phi i1 [0, %L", show trueLabel, "], [1, %L", show falseLabel, "]"]
   setLastLabel finLabel
   return tmp
@@ -65,7 +68,7 @@ genExpr (EAnd _ e e') = do
   emit $ goto finLabel
 
   emit $ placeLabel finLabel
-  tmp <- genTemp
+  tmp <- genAddr Types.Bool
   emit $ concat ["\t", show tmp, " = phi i1 [1, %L", show lastMidLabel, "], [0, %L", show falseLabel, "]"]
   setLastLabel finLabel
   return tmp
@@ -87,7 +90,7 @@ genExpr (EOr a e e') = do
   emit $ goto finLabel
 
   emit $ placeLabel finLabel
-  tmp <- genTemp
+  tmp <- genAddr Types.Bool
   emit $ concat ["\t", show tmp, " = phi i1 [1, %L", show entryLabel, "], ", "[1, %L", show lastMidLabel, "], [0, %L", show falseLabel, "]"]
   setLastLabel finLabel
   return tmp
@@ -113,9 +116,9 @@ genCmp :: String -> Expr -> Expr -> GenM Address
 genCmp comp e e' = do
   addr <- genExpr e
   addr' <- genExpr e'
-  temp <- genTemp
-  emit $ icmp comp temp addr addr'
-  return temp
+  c <- genAddr Types.Bool
+  emit $ icmp comp c addr addr'
+  return c
 
 genBinaryOp :: String -> Expr -> Expr -> GenM Address
 genBinaryOp op e e' = do
@@ -124,12 +127,15 @@ genBinaryOp op e e' = do
   emitBinaryOp op addr addr'
 
 emitBinaryOp :: String -> Address -> Address -> GenM Address
-emitBinaryOp "add i32" a@(StrAddr i) a'@(StrAddr i') = do
-  -- addition op overloaded for concatenating strings
-  strAddr <- genStrAddr
-  emit $ concat ["\t", show strAddr, " = call i8* @__concat(i8* ", show a, ", i8* ", show a', ")"]
-  return strAddr
 emitBinaryOp op a a' = do
-  temp <- genTemp
-  emit $ concat ["\t", show temp, " = ", op, " ", show a, ", ", show a']
-  return temp
+  let t = addrToLLVMType a
+  let t' = addrToLLVMType a'
+  if t == "i8*"
+    then do
+      addr <- genAddr Types.Str
+      emit $ concat ["\t", show addr, " = call i8* @__concat(i8* ", show a, ", i8* ", show a', ")"]
+      return addr
+    else do
+      addr <- genAddr Types.Int
+      emit $ concat ["\t", show addr, " = ", op, " ", show a, ", ", show a']
+      return addr

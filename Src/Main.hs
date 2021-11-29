@@ -31,7 +31,6 @@ main = do
     )
   let (Program _ topDefs) = program
   (_, state) <- runGen (genCode topDefs)
-  print $ store state
   let code = unlines . reverse $ revCode state
 
   let newFilename = replaceFileExtension ".lat" ".ll" file

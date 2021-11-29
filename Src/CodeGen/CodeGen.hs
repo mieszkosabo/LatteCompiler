@@ -7,7 +7,6 @@ import qualified Data.Map as M
 import Parser.AbsLatte
 import Src.CodeGen.GenStmts
 import Src.CodeGen.State
-import Src.CodeGen.State (addStringLiteralsDefinitions)
 import Src.CodeGen.Utils
 import Src.Frontend.Types (stripPositionFromType)
 import qualified Src.Frontend.Types as Types

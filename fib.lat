@@ -6,6 +6,13 @@ int fib(int n) {
 }
 
 int main(){
-    printInt(fib(10));
+    if (letsgo() && true)
+        printInt(fib(10));
+    else 
+        printString("hihi");
     return 0;
+}
+
+boolean letsgo() {
+    return true;
 }

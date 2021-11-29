@@ -8,6 +8,7 @@ import Parser.AbsLatte
 import Src.CodeGen.GenExpr (emitBinaryOp, genExpr)
 import Src.CodeGen.State
 import Src.CodeGen.Utils
+import qualified Src.Frontend.Types as Types
 
 foldEnv :: (a -> GenM Env) -> [a] -> GenM Env
 foldEnv fun l = do
@@ -22,11 +23,11 @@ genStmts = foldEnv genStmt
 genStmt :: Stmt -> GenM Env
 genStmt (Empty _) = ask
 genStmt (SExp _ e) = genExpr e >> ask
-genStmt (BStmt _ (Block _ stmts)) = genStmts stmts
-genStmt (Decl _ t items) = foldEnv declareItem items -- TODO: pass type so that the initial value can be correctly inited
+genStmt (BStmt _ (Block _ stmts)) = genStmts stmts >> ask
+genStmt (Decl _ t items) = foldEnv (declareItem (Types.stripPositionFromType t)) items
 genStmt (Ret _ e) = do
   addr <- genExpr e
-  emit $ "\tret i32 " ++ show addr
+  emit $ "\tret " ++ addrToLLVMType addr ++ " " ++ show addr
   ask
 genStmt (VRet _) = emit "\tret void" >> ask
 genStmt (Ass _ (Ident ident) e) = do
@@ -77,7 +78,7 @@ genStmt (Cond pos e thenStmt) = do
   env <- ask
   ifLabel <- freshLabel
   finLabel <- freshLabel
-  cond <- genExpr e
+  cond <- genExpr e -- TODO: skip branches if cond is `true` or `false`
   emit $ branch cond ifLabel finLabel
   lastEntryLabel <- gets lastLabel
   entryStore <- gets store
@@ -100,12 +101,12 @@ genStmt (Cond pos e thenStmt) = do
   return env
 genStmt (Incr _ (Ident ident)) = do
   addr <- getVar ident
-  addr' <- emitBinaryOp "add i32" addr (Literal 1)
+  addr' <- emitBinaryOp "add i32" addr (ImmediateInt 1)
   setVar ident addr'
   ask
 genStmt (Decr _ (Ident ident)) = do
   addr <- getVar ident
-  addr' <- emitBinaryOp "sub i32" addr (Literal 1)
+  addr' <- emitBinaryOp "sub i32" addr (ImmediateInt 1)
   setVar ident addr'
   ask
 genStmt (While _ e bodyStmt) = do
@@ -138,11 +139,16 @@ genStmt (While _ e bodyStmt) = do
   setLastLabel finLabel
   return env
 
-declareItem :: Item -> GenM Env
-declareItem (NoInit _ (Ident ident)) = do
-  (_, env) <- declareVar ident (Left 0)
+declareItem :: Types.LatteType -> Item -> GenM Env
+declareItem t (NoInit _ (Ident ident)) = do
+  addr <- case t of
+    Types.Int -> return $ ImmediateInt 0
+    Types.Str -> genAddr Types.Str
+    Types.Bool -> return $ ImmediateBool 0
+    _ -> undefined
+  (_, env) <- declareVar ident addr
   return env
-declareItem (Init _ (Ident ident) e) = do
+declareItem _ (Init _ (Ident ident) e) = do
   addr <- genExpr e
-  (_, env) <- declareVar ident (Right addr)
+  (_, env) <- declareVar ident addr
   return env

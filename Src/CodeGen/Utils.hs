@@ -20,10 +20,10 @@ addArgsToEnv args = do
   env <- ask
   foldM f ([], env) $ reverse args
   where
-    f = \(addresses, env) (Arg _ t (Ident ident)) -> local (const env) $ fun addresses ident -- (b -> a -> m b)
-    fun = \addresses ident -> do
-      id <- freshId
-      (addr, env') <- declareVar ident (Right $ Local id)
+    f = \(addresses, env) (Arg _ t (Ident ident)) -> local (const env) $ fun t addresses ident -- (b -> a -> m b)
+    fun = \ty addresses ident -> do
+      addr <- genAddr $ stripPositionFromType ty
+      (addr, env') <- declareVar ident addr
       return (addr : addresses, env')
 
 createArgString :: [String] -> [Address] -> String
@@ -57,9 +57,10 @@ createPhiNodes currLabel pairs = do
   where
     f (varname, loc) = do
       s <- gets store
-      let tmp = WithLabel varname currLabel (s M.! loc)
+      let addr = s M.! loc
+      let tmp = WithLabel varname currLabel addr
       let phiRhs = createPhiNode loc pairs
-      emit $ concat ["\t", show tmp, " = phi i32 ", intercalate "," phiRhs]
+      emit $ concat ["\t", show tmp, " = phi " ++ addrToLLVMType addr, intercalate "," phiRhs]
       setVar varname tmp
 
 createPhiNode :: Loc -> [(Label, Store)] -> [String]
