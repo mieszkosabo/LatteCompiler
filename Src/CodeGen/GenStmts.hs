@@ -35,70 +35,85 @@ genStmt (Ass _ (Ident ident) e) = do
   setVar ident addr
   ask
 genStmt (CondElse _ e thenSt elseSt) = do
-  env <- ask
-  ifLabel <- freshLabel
-  elseLabel <- freshLabel
-  finLabel <- freshLabel
   cond <- genExpr e
-  emit $ branch cond ifLabel elseLabel
-  entryStore <- gets store
+  case cond of
+    ImmediateBool 1 -> do
+      -- `if(true)` then just generate `thenStmt` w/o branching
+      genStmt thenSt
+      ask
+    ImmediateBool 0 -> do
+      -- `if(false)` then just generate `elseStmt` w/o branching
+      genStmt elseSt
+      ask
+    _ -> do
+      ifLabel <- freshLabel
+      elseLabel <- freshLabel
+      finLabel <- freshLabel
+      emit $ branch cond ifLabel elseLabel
+      entryStore <- gets store
 
-  -- if block
-  emit $ placeLabel ifLabel
-  setLastLabel ifLabel
-  genStmt thenSt
-  lastIfLabel <- gets lastLabel
-  st <- get
-  let ifReturns = isExplicitReturn st
-  unless ifReturns (emit $ goto finLabel)
-  ifStore <- gets store
+      -- if block
+      emit $ placeLabel ifLabel
+      setLastLabel ifLabel
+      genStmt thenSt
+      lastIfLabel <- gets lastLabel
+      st <- get
+      let ifReturns = isExplicitReturn st
+      unless ifReturns (emit $ goto finLabel)
+      ifStore <- gets store
 
-  -- else Block
-  restore entryStore
-  emit $ placeLabel elseLabel
-  setLastLabel elseLabel
-  genStmt elseSt
-  lastElseLabel <- gets lastLabel
-  st' <- get
-  let elseReturns = isExplicitReturn st'
-  unless elseReturns (emit $ goto finLabel)
-  elseStore <- gets store
+      -- else Block
+      restore entryStore
+      emit $ placeLabel elseLabel
+      setLastLabel elseLabel
+      genStmt elseSt
+      lastElseLabel <- gets lastLabel
+      st' <- get
+      let elseReturns = isExplicitReturn st'
+      unless elseReturns (emit $ goto finLabel)
+      elseStore <- gets store
 
-  -- final block
-  unless
-    ifReturns -- in if/else if one branch returns then the other has to as well
-    ( do
-        emit $ placeLabel finLabel
-        restore entryStore
-        createPhiNodes finLabel [(lastIfLabel, ifStore), (lastElseLabel, elseStore)]
-        setLastLabel finLabel
-    )
-  return env
+      -- final block
+      unless
+        ifReturns -- in if/else if one branch returns then the other has to as well
+        ( do
+            emit $ placeLabel finLabel
+            restore entryStore
+            createPhiNodes finLabel [(lastIfLabel, ifStore), (lastElseLabel, elseStore)]
+            setLastLabel finLabel
+        )
+      ask
 genStmt (Cond pos e thenStmt) = do
-  env <- ask
-  ifLabel <- freshLabel
-  finLabel <- freshLabel
-  cond <- genExpr e -- TODO: skip branches if cond is `true` or `false`
-  emit $ branch cond ifLabel finLabel
-  lastEntryLabel <- gets lastLabel
-  entryStore <- gets store
+  cond <- genExpr e
+  case cond of
+    ImmediateBool 1 -> do
+      -- `if(true)` then just generate stmt w/o branching
+      genStmt thenStmt
+      ask
+    ImmediateBool 0 -> ask -- `if(false)` then just skip the stmt inside
+    _ -> do
+      ifLabel <- freshLabel
+      finLabel <- freshLabel
+      emit $ branch cond ifLabel finLabel
+      lastEntryLabel <- gets lastLabel
+      entryStore <- gets store
 
-  -- if block
-  emit $ placeLabel ifLabel
-  setLastLabel ifLabel
-  genStmt thenStmt
-  lastIfLabel <- gets lastLabel
-  st <- get
-  let ifReturns = isExplicitReturn st
-  unless ifReturns (emit $ goto finLabel)
-  ifStore <- gets store
+      -- if block
+      emit $ placeLabel ifLabel
+      setLastLabel ifLabel
+      genStmt thenStmt
+      lastIfLabel <- gets lastLabel
+      st <- get
+      let ifReturns = isExplicitReturn st
+      unless ifReturns (emit $ goto finLabel)
+      ifStore <- gets store
 
-  -- final block
-  emit $ placeLabel finLabel
-  restore entryStore
-  unless ifReturns (createPhiNodes finLabel [(lastIfLabel, ifStore), (lastEntryLabel, entryStore)])
-  setLastLabel finLabel
-  return env
+      -- final block
+      emit $ placeLabel finLabel
+      restore entryStore
+      unless ifReturns (createPhiNodes finLabel [(lastIfLabel, ifStore), (lastEntryLabel, entryStore)])
+      setLastLabel finLabel
+      ask
 genStmt (Incr _ (Ident ident)) = do
   addr <- getVar ident
   addr' <- emitBinaryOp "add i32" addr (ImmediateInt 1)

@@ -48,7 +48,7 @@ branch :: Address -> Label -> Label -> Instr
 branch a t e = unwords ["\tbr i1", show a, ",", useLabel t, ",", useLabel e]
 
 icmp :: String -> Address -> Address -> Address -> Instr
-icmp comp c a a' = concat ["\t", show c, " = icmp ", comp, " i32 ", show a, ",", show a']
+icmp comp c a a' = concat ["\t", show c, " = icmp ", comp, " ", addrToLLVMType a, "  ", show a, ",", show a']
 
 createPhiNodes :: Label -> [(Label, Store)] -> GenM ()
 createPhiNodes currLabel pairs = do
