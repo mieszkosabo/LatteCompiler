@@ -27,10 +27,15 @@ print()
 # GOOD
 
 goodFiles = [f for f in os.listdir("tests/good") if f.endswith('.lat') and not f.startswith(".")]
+TEST_DIR = 'tests/good'
 
 tests_passed = 0
 for inputFile in goodFiles:
-    p = subprocess.run('./latc ' + f'tests/good/{inputFile}', shell=True, capture_output=True)
+    subprocess.call('./latc ' + f'{TEST_DIR}/{inputFile}', shell=True)
+    if os.path.exists(f'{TEST_DIR}/{inputFile[:-4]}.input'):
+        p = subprocess.run(f'lli {TEST_DIR}/{inputFile[:-4]}.bc < {TEST_DIR}/{inputFile[:-4]}.input | diff - {TEST_DIR}/{inputFile[:-4]}.output', shell=True)
+    else:
+        p = subprocess.run(f'lli {TEST_DIR}/{inputFile[:-4]}.bc | diff - {TEST_DIR}/{inputFile[:-4]}.output', shell=True)
     if p.returncode == 0:
         tests_passed += 1
         print(f'{inputFile} OK')

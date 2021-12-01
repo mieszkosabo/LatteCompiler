@@ -27,8 +27,11 @@ Parser/AbsLatte.hs Parser/LexLatte.x Parser/ParLatte.y Parser/PrintLatte.hs Pars
 latc: lib/runtime.bc Parser/AbsLatte.hs Parser/ParLatte.hs Parser/LexLatte.hs Src/Main.hs Src/Frontend/*.hs Src/CodeGen/*
 	${GHC} -o latc Src/Main.hs
 
+lib/runtime.ll: lib/runtime.c
+	cd lib && clang -emit-llvm -S runtime.c 
+
 lib/runtime.bc: lib/runtime.ll
-	llvm-as $<
+	cd lib && llvm-as runtime.ll
 
 # Rules for cleaning generated files.
 
