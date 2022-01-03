@@ -132,6 +132,13 @@ genBinaryOp op e e' = do
   emitBinaryOp op addr addr'
 
 emitBinaryOp :: String -> Address -> Address -> GenM Address
+emitBinaryOp op (ImmediateInt n) (ImmediateInt n') = case op of -- constant folding
+  "add i32" -> return $ ImmediateInt (n + n')
+  "sub i32" -> return $ ImmediateInt (n - n')
+  "mul i32" -> return $ ImmediateInt (n * n')
+  "sdiv i32" -> return $ ImmediateInt (n `div` n')
+  "srem i32" -> return $ ImmediateInt (n `mod` n')
+  _ -> undefined
 emitBinaryOp op a a' = do
   let t = addrToLLVMType a
   let t' = addrToLLVMType a'

@@ -4,7 +4,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import qualified Data.Map as M
 import qualified Src.Frontend.Types as Types
-import Data.List (intercalate)
+import Data.List (intercalate, find)
 
 type VarName = String
 
@@ -23,6 +23,7 @@ data Address
   | ImmediateBool Int
   | StrAddr Int
   | WithLabel VarName Label Address
+  deriving Eq
 
 instance Show Address where
   show (IntAddr i) = "%i" ++ show i
@@ -55,7 +56,7 @@ data Block = LLVMBlock {
     label :: Label,
     instrs :: [IntermediateInstr],
     preds :: [Label]
-}
+} deriving Eq
 
 instance Show Block where
   show (LLVMBlock _ instrs _) = unlines (map printIntermediateInstr (reverse instrs))
@@ -107,6 +108,15 @@ data LLVMInstr =
     | IVRet
     | IStringLiteralDef StringLiteral
     | ILabel Label
+    deriving Eq
+
+isCommonSubExpression :: LLVMInstr -> LLVMInstr -> Bool
+isCommonSubExpression (IBitCast _ id) (IBitCast _ id') = id == id'
+isCommonSubExpression (ICmp s a a') (ICmp s' a1 a2) = s == s' && a == a1 && a' == a2
+isCommonSubExpression (IBinOp "mul i32" a a') (IBinOp "mul i32" a1 a2) = (a == a1 && a' == a2) || (a == a2 && a' == a1)
+isCommonSubExpression (IBinOp "add i32" a a') (IBinOp "add i32" a1 a2) = (a == a1 && a' == a2) || (a == a2 && a' == a1)
+isCommonSubExpression (IBinOp s a a') (IBinOp s' a1 a2) = s == s' && a == a1 && a' == a2
+isCommonSubExpression _ _ = False
 
 instance Show LLVMInstr where
     show (ICall ty name args) = concat ["call ", ty, " @", name, "(", argsString, ")"]
@@ -125,7 +135,7 @@ instance Show LLVMInstr where
     show (IBinOp op addr addr') = concat [op, " ", show addr, ", ", show addr']
     show (IRet ty addr) = concat ["ret ", ty, " ", show addr]
     show IVRet = "ret void"
-    show (IStringLiteralDef sl) = show sl
+    show (IStringLiteralDef sl) = show sl ++ "\n"
     show (ILabel l) = concat ["L", show l, ":"]
 
 
@@ -137,16 +147,22 @@ data StringLiteral = StringLiteral
   { text :: String,
     stringId :: String
   }
+instance Eq StringLiteral where
+  sl == sl' = stringId sl == stringId sl'
 
 instance Show StringLiteral where
   show sl = concat [stringId sl, " = private constant [", show $ length (text sl) + 1, " x i8] c", "\"", text sl, "\\00", "\""]
 
 saveStringLiteral :: String -> GenM String
 saveStringLiteral str = do
-  id <- fmap (\i -> "@s" ++ show i) freshId
-  let sl = StringLiteral {text = str, stringId = id}
-  modify (\s -> s {stringLiterals = sl : stringLiterals s})
-  return id
+  st <- get
+  case find (\sl -> text sl == str) (stringLiterals st) of
+    Just sl -> return $ stringId sl
+    Nothing -> do
+      id <- fmap (\i -> "@s" ++ show i) freshId
+      let sl = StringLiteral {text = str, stringId = id}
+      modify (\s -> s {stringLiterals = sl : stringLiterals s})
+      return id
 
 addStringLiteralsDefinitions :: [StringLiteral] -> String -> IO ()
 addStringLiteralsDefinitions literals filename 

@@ -97,7 +97,6 @@ genStmt (Cond pos e thenStmt) = do
       ifLabel <- addBlock [l]
       finLabel <- addBlock [l, ifLabel]
       emit $ branch cond ifLabel finLabel
-      lastEntryLabel <- gets currentBlock -- FIXME: maybe could be removed
       entryStore <- gets store
 
       -- if block
@@ -114,7 +113,7 @@ genStmt (Cond pos e thenStmt) = do
       setBlock finLabel
       emit $ placeLabel finLabel
       restore entryStore
-      unless ifReturns (createPhiNodes finLabel [(lastIfLabel, ifStore), (lastEntryLabel, entryStore)])
+      unless ifReturns (createPhiNodes finLabel [(lastIfLabel, ifStore), (l, entryStore)])
       ask
 genStmt (Incr _ (Ident ident)) = do
   addr <- getVar ident
