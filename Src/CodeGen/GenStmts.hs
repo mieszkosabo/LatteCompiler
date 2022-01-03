@@ -46,17 +46,18 @@ genStmt (CondElse _ e thenSt elseSt) = do
       genStmt elseSt
       ask
     _ -> do
-      ifLabel <- freshLabel
-      elseLabel <- freshLabel
-      finLabel <- freshLabel
+      l <- gets currentBlock
+      ifLabel <- addBlock [l]
+      elseLabel <- addBlock [l]
+      finLabel <- addBlock [ifLabel, elseLabel]
       emit $ branch cond ifLabel elseLabel
       entryStore <- gets store
 
       -- if block
+      setBlock ifLabel
       emit $ placeLabel ifLabel
-      setLastLabel ifLabel
       genStmt thenSt
-      lastIfLabel <- gets lastLabel
+      lastIfLabel <- gets currentBlock
       st <- get
       let ifReturns = isExplicitReturn st
       unless ifReturns (emit $ goto finLabel)
@@ -64,10 +65,10 @@ genStmt (CondElse _ e thenSt elseSt) = do
 
       -- else Block
       restore entryStore
+      setBlock elseLabel
       emit $ placeLabel elseLabel
-      setLastLabel elseLabel
       genStmt elseSt
-      lastElseLabel <- gets lastLabel
+      lastElseLabel <- gets currentBlock
       st' <- get
       let elseReturns = isExplicitReturn st'
       unless elseReturns (emit $ goto finLabel)
@@ -78,9 +79,9 @@ genStmt (CondElse _ e thenSt elseSt) = do
         ifReturns -- in if/else if one branch returns then the other has to as well
         ( do
             emit $ placeLabel finLabel
+            setBlock finLabel
             restore entryStore
             createPhiNodes finLabel [(lastIfLabel, ifStore), (lastElseLabel, elseStore)]
-            setLastLabel finLabel
         )
       ask
 genStmt (Cond pos e thenStmt) = do
@@ -92,27 +93,28 @@ genStmt (Cond pos e thenStmt) = do
       ask
     ImmediateBool 0 -> ask -- `if(false)` then just skip the stmt inside
     _ -> do
-      ifLabel <- freshLabel
-      finLabel <- freshLabel
+      l <- gets currentBlock
+      ifLabel <- addBlock [l]
+      finLabel <- addBlock [l, ifLabel]
       emit $ branch cond ifLabel finLabel
-      lastEntryLabel <- gets lastLabel
+      lastEntryLabel <- gets currentBlock -- FIXME: maybe could be removed
       entryStore <- gets store
 
       -- if block
+      setBlock ifLabel
       emit $ placeLabel ifLabel
-      setLastLabel ifLabel
       genStmt thenStmt
-      lastIfLabel <- gets lastLabel
+      lastIfLabel <- gets currentBlock
       st <- get
       let ifReturns = isExplicitReturn st
       unless ifReturns (emit $ goto finLabel)
       ifStore <- gets store
 
       -- final block
+      setBlock finLabel
       emit $ placeLabel finLabel
       restore entryStore
       unless ifReturns (createPhiNodes finLabel [(lastIfLabel, ifStore), (lastEntryLabel, entryStore)])
-      setLastLabel finLabel
       ask
 genStmt (Incr _ (Ident ident)) = do
   addr <- getVar ident
@@ -126,23 +128,25 @@ genStmt (Decr _ (Ident ident)) = do
   ask
 genStmt (While _ e bodyStmt) = do
   env <- ask
-  condLabel <- freshLabel
-  bodyLabel <- freshLabel
-  finLabel <- freshLabel
-  lastEntryLabel <- gets lastLabel
+  l <- gets currentBlock
+  condLabel <- addBlock [l]
+  bodyLabel <- addBlock [condLabel]
+  finLabel <- addBlock [condLabel]
+  lastEntryLabel <- gets currentBlock
   entryStore <- gets store
   emit $ goto condLabel
 
   -- body block
+  setBlock bodyLabel
   emit $ placeLabel bodyLabel
-  setLastLabel bodyLabel
   wrapAllAddressesWithLabel condLabel
   genStmt bodyStmt
-  lastBodyLabel <- gets lastLabel
+  lastBodyLabel <- gets currentBlock
   emit $ goto condLabel
   bodyStore <- gets store
 
   -- cond block
+  setBlock condLabel
   emit $ placeLabel condLabel
   restore entryStore
   createPhiNodes condLabel [(lastBodyLabel, bodyStore), (lastEntryLabel, entryStore)]
@@ -150,8 +154,8 @@ genStmt (While _ e bodyStmt) = do
   emit $ branch cond bodyLabel finLabel
 
   -- finalBlock
+  setBlock finLabel
   emit $ placeLabel finLabel
-  setLastLabel finLabel
   return env
 
 declareItem :: Types.LatteType -> Item -> GenM Env

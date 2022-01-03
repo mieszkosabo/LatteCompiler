@@ -34,65 +34,70 @@ genExpr (EString _ str) = do
   return addr
 genExpr (Not _ e) = do
   cond <- genExpr e
-  trueLabel <- gets lastLabel
-  falseLabel <- freshLabel
-  finLabel <- freshLabel
+  trueLabel <- gets currentBlock
+  falseLabel <- addBlock [trueLabel]
+  finLabel <- addBlock [trueLabel]
   emit $ branch cond finLabel falseLabel
 
+  setBlock falseLabel
   emit $ placeLabel falseLabel
   emit $ goto finLabel
 
+  setBlock finLabel
   emit $ placeLabel finLabel
   tmp <- genAddr Types.Bool
   emit (Just tmp, IPhi "i1" [(ImmediateBool 0, trueLabel), (ImmediateBool 1, falseLabel)])
-  setLastLabel finLabel
   return tmp
 genExpr (Neg _ e) = genBinaryOp "sub i32" (ELitInt (Just (0, 0)) 0) e
 genExpr (EAdd _ e op e') = genBinaryOp (addOpToLLVM op) e e'
 genExpr (EMul _ e op e') = genBinaryOp (mulOpToLLVM op) e e'
 genExpr (ERel _ e op e') = genCmp (relOpToLLVM op) e e'
 genExpr (EAnd _ e e') = do
-  midLabel <- freshLabel
-  falseLabel <- freshLabel
-  finLabel <- freshLabel
+  l <- gets currentBlock
+  midLabel <- addBlock [l]
+  falseLabel <- addBlock [l, midLabel]
+  finLabel <- addBlock [midLabel, falseLabel]
   cond <- genExpr e
   emit $ branch cond midLabel falseLabel
 
+  setBlock midLabel
   emit $ placeLabel midLabel
-  setLastLabel midLabel
   cond' <- genExpr e'
-  lastMidLabel <- gets lastLabel
+  lastMidLabel <- gets currentBlock
   emit $ branch cond' finLabel falseLabel
 
+  setBlock falseLabel
   emit $ placeLabel falseLabel
   emit $ goto finLabel
 
+  setBlock finLabel
   emit $ placeLabel finLabel
   tmp <- genAddr Types.Bool
   emit (Just tmp, IPhi "i1" [(ImmediateBool 1, lastMidLabel), (ImmediateBool 0, falseLabel)])
-  setLastLabel finLabel
   return tmp
 genExpr (EOr a e e') = do
-  midLabel <- freshLabel
-  falseLabel <- freshLabel
-  finLabel <- freshLabel
+  l <- gets currentBlock
+  midLabel <- addBlock [l]
+  falseLabel <- addBlock [midLabel]
+  finLabel <- addBlock [l, falseLabel, midLabel]
   cond <- genExpr e
-  entryLabel <- gets lastLabel
+  entryLabel <- gets currentBlock
   emit $ branch cond finLabel midLabel
 
+  setBlock midLabel
   emit $ placeLabel midLabel
-  setLastLabel midLabel
   cond' <- genExpr e'
-  lastMidLabel <- gets lastLabel
+  lastMidLabel <- gets currentBlock
   emit $ branch cond' finLabel falseLabel
 
+  setBlock falseLabel
   emit $ placeLabel falseLabel
   emit $ goto finLabel
 
+  setBlock finLabel 
   emit $ placeLabel finLabel
   tmp <- genAddr Types.Bool
   emit (Just tmp, IPhi "i1" [(ImmediateBool 1, entryLabel), (ImmediateBool 1, lastMidLabel), (ImmediateBool 0, falseLabel)])
-  setLastLabel finLabel
   return tmp
 
 addOpToLLVM :: AddOp -> String

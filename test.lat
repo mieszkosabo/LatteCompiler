@@ -1,11 +1,8 @@
 int main() {
-    int x;
-    if (42 == 41) {
-        x = 42;
-    }
-    else {
-        x = 2;
-    }
-    printInt(x);
+    
     return 0;
+}
+
+boolean implies(boolean x, boolean y) {
+    return !x || y;
 }

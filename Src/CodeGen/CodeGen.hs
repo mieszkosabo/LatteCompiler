@@ -31,11 +31,9 @@ genCode' (f : fs) filename = do
   let argString = createArgString types addresses
   liftIO $ appendFile filename $ concat ["define ", show ty, " @", ident, "(", argString, ")", "{\n"]
   
-  entryLabel <- freshLabel
-  modify (\s -> s {lastLabel = entryLabel})
   l <- addBlock []
   setBlock l
-  emit $ placeLabel entryLabel
+  emit $ placeLabel l
   local (const env) $ genStmts stmts
   st <- get
   when

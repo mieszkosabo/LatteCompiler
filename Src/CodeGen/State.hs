@@ -45,8 +45,7 @@ data GenState = GenState
     blocks :: M.Map Label Block,
     currentBlock :: Label,
     functionTypes :: M.Map VarName Types.LatteType,
-    stringLiterals :: [StringLiteral],
-    lastLabel :: Label
+    stringLiterals :: [StringLiteral]
   }
   deriving (Show)
 
@@ -134,9 +133,6 @@ instance Show LLVMInstr where
 restore :: Store -> GenM ()
 restore st = modify (\s -> s {store = st})
 
-setLastLabel :: Label -> GenM ()
-setLastLabel l = modify (\s -> s {lastLabel = l})
-
 data StringLiteral = StringLiteral
   { text :: String,
     stringId :: String
@@ -219,7 +215,6 @@ initialState =
       revCode = [],
       functionTypes = M.empty,
       stringLiterals = [],
-      lastLabel = -1,
       blocks = M.empty,
       currentBlock = -1
     }
