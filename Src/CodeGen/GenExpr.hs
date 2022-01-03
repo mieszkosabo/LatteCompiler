@@ -21,16 +21,16 @@ genExpr (EApp _ (Ident ident) exprs) = do
   let argsString = createArgString types args
   case t of
     Types.Void -> do
-      emit $ concat ["\tcall void @", ident, "(", argsString, ")"]
+      emit (Nothing, ICall "void" ident (zip types args))
       return $ ImmediateInt 1
     _ -> do
       temp <- genAddr t
-      emit $ concat ["\t", show temp, " = call ", show t ++ " @", ident, "(", argsString, ")"]
+      emit (Just temp, ICall (show t) ident (zip types args))
       return temp
 genExpr (EString _ str) = do
   id <- saveStringLiteral str
   addr <- genAddr Types.Str
-  emit $ concat ["\t", show addr, " = bitcast [", show (length str + 1), " x i8]* ", id, " to i8*"]
+  emit (Just addr, IBitCast (length str + 1) id)
   return addr
 genExpr (Not _ e) = do
   cond <- genExpr e
@@ -44,7 +44,7 @@ genExpr (Not _ e) = do
 
   emit $ placeLabel finLabel
   tmp <- genAddr Types.Bool
-  emit $ concat ["\t", show tmp, " = phi i1 [0, %L", show trueLabel, "], [1, %L", show falseLabel, "]"]
+  emit (Just tmp, IPhi "i1" [(ImmediateBool 0, trueLabel), (ImmediateBool 1, falseLabel)])
   setLastLabel finLabel
   return tmp
 genExpr (Neg _ e) = genBinaryOp "sub i32" (ELitInt (Just (0, 0)) 0) e
@@ -69,7 +69,7 @@ genExpr (EAnd _ e e') = do
 
   emit $ placeLabel finLabel
   tmp <- genAddr Types.Bool
-  emit $ concat ["\t", show tmp, " = phi i1 [1, %L", show lastMidLabel, "], [0, %L", show falseLabel, "]"]
+  emit (Just tmp, IPhi "i1" [(ImmediateBool 1, lastMidLabel), (ImmediateBool 0, falseLabel)])
   setLastLabel finLabel
   return tmp
 genExpr (EOr a e e') = do
@@ -91,7 +91,7 @@ genExpr (EOr a e e') = do
 
   emit $ placeLabel finLabel
   tmp <- genAddr Types.Bool
-  emit $ concat ["\t", show tmp, " = phi i1 [1, %L", show entryLabel, "], ", "[1, %L", show lastMidLabel, "], [0, %L", show falseLabel, "]"]
+  emit (Just tmp, IPhi "i1" [(ImmediateBool 1, entryLabel), (ImmediateBool 1, lastMidLabel), (ImmediateBool 0, falseLabel)])
   setLastLabel finLabel
   return tmp
 
@@ -133,9 +133,9 @@ emitBinaryOp op a a' = do
   if t == "i8*"
     then do
       addr <- genAddr Types.Str
-      emit $ concat ["\t", show addr, " = call i8* @__concat(i8* ", show a, ", i8* ", show a', ")"]
+      emit (Just addr, ICall "i8*" "__concat" [("i8*", a), ("i8*", a')])
       return addr
     else do
       addr <- genAddr Types.Int
-      emit $ concat ["\t", show addr, " = ", op, " ", show a, ", ", show a']
+      emit (Just addr, IBinOp op a a')
       return addr

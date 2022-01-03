@@ -13,6 +13,7 @@ import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (IOMode (ReadMode, WriteMode), getContents, hGetContents, hPrint, hPutStr, hPutStrLn, openFile, stderr, stdin, stdout)
 import System.Process (callCommand)
+import System.Directory (removeFile, doesFileExist)
 
 main :: IO ()
 main = do
@@ -30,11 +31,11 @@ main = do
         exitWithFailureMessage (show msg)
     )
   let (Program _ topDefs) = program
-  (_, state) <- runGen (genCode topDefs)
-  let code = unlines . reverse $ revCode state
-
   let newFilename = replaceFileExtension ".lat" ".ll" file
-  writeFile newFilename code
+  removeOldLLVMFile <- doesFileExist newFilename
+  when removeOldLLVMFile (removeFile newFilename)
+  (_, state) <- runGen (genCode topDefs newFilename)
+  
   let bytecodeFilename = replaceFileExtension ".ll" ".bc" newFilename
   callCommand $ "llvm-as -o " ++ bytecodeFilename ++ " " ++ newFilename
   callCommand $ "llvm-link -o " ++ bytecodeFilename ++ " " ++ bytecodeFilename ++ " lib/runtime.bc"

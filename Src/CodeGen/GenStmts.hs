@@ -27,9 +27,9 @@ genStmt (BStmt _ (Block _ stmts)) = genStmts stmts >> ask
 genStmt (Decl _ t items) = foldEnv (declareItem (Types.stripPositionFromType t)) items
 genStmt (Ret _ e) = do
   addr <- genExpr e
-  emit $ "\tret " ++ addrToLLVMType addr ++ " " ++ show addr
+  emit (Nothing, IRet (addrToLLVMType addr) addr)
   ask
-genStmt (VRet _) = emit "\tret void" >> ask
+genStmt (VRet _) = emit (Nothing, IVRet) >> ask
 genStmt (Ass _ (Ident ident) e) = do
   addr <- genExpr e
   setVar ident addr

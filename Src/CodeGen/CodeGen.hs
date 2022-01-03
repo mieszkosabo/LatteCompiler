@@ -12,34 +12,41 @@ import Src.Frontend.Types (stripPositionFromType)
 import qualified Src.Frontend.Types as Types
 import System.IO
 
-genCode :: [TopDef] -> GenM ()
-genCode topdefs = do
-  addTopLevelDefs topdefs
-  addPredefinedFunctions
-  addInternalFunctions
-  genCode' topdefs
+genCode :: [TopDef] -> String -> GenM ()
+genCode topdefs filename = do
+  addTopLevelDefs topdefs 
+  addPredefinedFunctions filename
+  liftIO $ addInternalFunctions filename
+  genCode' topdefs filename
   st <- get
-  addStringLiteralsDefinitions $ reverse $ stringLiterals st
+  liftIO $ addStringLiteralsDefinitions (stringLiterals st) filename
 
-genCode' :: [TopDef] -> GenM ()
-genCode' [] = emit ""
-genCode' (f : fs) = do
+genCode' :: [TopDef] -> String -> GenM ()
+genCode' [] _ = return ()
+genCode' (f : fs) filename = do
   let (FnDef _ t (Ident ident) args (Block _ stmts)) = f
   let ty = stripPositionFromType t
   (addresses, env) <- addArgsToEnv args
   let types = argsTypes args
   let argString = createArgString types addresses
-  emit $ concat ["define ", show ty, " @", ident, "(", argString, ")", "{"]
+  liftIO $ appendFile filename $ concat ["define ", show ty, " @", ident, "(", argString, ")", "{\n"]
+  
   entryLabel <- freshLabel
   modify (\s -> s {lastLabel = entryLabel})
+  l <- addBlock []
+  setBlock l
   emit $ placeLabel entryLabel
   local (const env) $ genStmts stmts
   st <- get
   when
     (isImplicitReturn st)
-    (emit "\tret void")
-  emit "}"
-  genCode' fs
+    (emit (Nothing, IVRet))
+  blocks <- gets blocks
+  forM_ (M.elems blocks) (liftIO . appendFile filename . show)
+
+  liftIO $ appendFile filename "}\n"
+  clearBlocks
+  genCode' fs filename
 
 addFunctionType :: TopDef -> GenM ()
 addFunctionType topdef = do
@@ -51,17 +58,17 @@ addFunctionType topdef = do
 addTopLevelDefs :: [TopDef] -> GenM ()
 addTopLevelDefs = mapM_ addFunctionType
 
-addPredefinedFunctions :: GenM ()
-addPredefinedFunctions =
+addPredefinedFunctions :: String -> GenM ()
+addPredefinedFunctions filename =
   mapM_
     ( \(ident, t) -> do
         modify (\s -> s {functionTypes = M.insert ident t (functionTypes s)})
         let (Types.Fun funType argsTypes) = t
         let argsString = intercalate ", " (map show argsTypes)
-        emit $ concat ["declare ", show funType, " @", ident, "(", argsString, ")"]
+        liftIO $ appendFile filename $ concat ["declare ", show funType, " @", ident, "(", argsString, ")\n"]
     )
     Types.predefinedFunctionsTypes
 
-addInternalFunctions :: GenM ()
-addInternalFunctions = do
-  emit "declare i8* @__concat(i8*, i8*)"
+addInternalFunctions :: String -> IO ()
+addInternalFunctions filename = do
+  appendFile filename "declare i8* @__concat(i8*, i8*)\n"

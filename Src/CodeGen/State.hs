@@ -4,6 +4,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import qualified Data.Map as M
 import qualified Src.Frontend.Types as Types
+import Data.List (intercalate)
 
 type VarName = String
 
@@ -41,11 +42,94 @@ data GenState = GenState
   { nextId :: Int,
     store :: Store,
     revCode :: Code,
+    blocks :: M.Map Label Block,
+    currentBlock :: Label,
     functionTypes :: M.Map VarName Types.LatteType,
     stringLiterals :: [StringLiteral],
     lastLabel :: Label
   }
   deriving (Show)
+
+clearBlocks :: GenM ()
+clearBlocks = modify $ \s -> s { blocks = M.empty }
+data Block = LLVMBlock {
+    label :: Label,
+    instrs :: [IntermediateInstr],
+    preds :: [Label]
+}
+
+instance Show Block where
+  show (LLVMBlock _ instrs _) = unlines (map printIntermediateInstr (reverse instrs))
+
+
+addBlock :: [Label] -> GenM Label
+addBlock preds = do
+  id <- freshLabel
+  let newBlock = LLVMBlock { label = id, instrs = [], preds = preds }
+  modify $ \s -> s { blocks = M.insert id newBlock (blocks s)}
+  return id
+
+setBlock :: Label -> GenM Label
+setBlock label = do
+  modify $ \s -> s { currentBlock = label}
+  return label
+
+getBlock :: GenM Block
+getBlock = do
+  b <- gets currentBlock
+  blks <- gets blocks
+  return $ blks M.! b
+
+modifyBlock :: Block -> GenM ()
+modifyBlock new = do
+  active <- gets currentBlock
+  modify $ \s -> s { blocks = M.insert active new (blocks s)}
+
+-- examples: 
+-- %t1 = add 4, 3 ----> (just %t1, IAdd 4 3)
+-- ret 42         ----> (Nothing, IRet 42)
+type IntermediateInstr = (Maybe Address, LLVMInstr) 
+
+printIntermediateInstr :: IntermediateInstr -> String
+printIntermediateInstr (Nothing, instr) = "\t" ++ show instr
+printIntermediateInstr (Just addr, instr) = "\t" ++ show addr ++ " = " ++ show instr
+
+type LLVMType = String
+
+data LLVMInstr = 
+    ICall LLVMType String [(String, Address)] -- type funName [(type, arg)]
+    | IBitCast Int String -- length StringId
+    | IGoto Label
+    | IBranch Address Label Label
+    | ICmp String Address Address -- cmpOperator address1 address2
+    | IPhi LLVMType [(Address, Label)] 
+    | IBinOp String Address Address
+    | IRet LLVMType Address
+    | IVRet
+    | IStringLiteralDef StringLiteral
+    | ILabel Label
+
+instance Show LLVMInstr where
+    show (ICall ty name args) = concat ["call ", ty, " @", name, "(", argsString, ")"]
+        where argsString = intercalate ", " $ map (\(argTy, arg) -> argTy ++ " " ++ show arg) args
+    show (IBitCast len id ) = concat ["bitcast [", show len, " x i8]* ", id, " to i8*"]
+    show (IGoto label) = "br label %L" ++ show label
+    show (IBranch addr thenLabel elseLabel) = concat ["br i1 ", show addr, ", label %L",  show thenLabel, ", label %L", show elseLabel]
+    show (ICmp op addr addr') = concat ["icmp ", op, " ", addrToLLVMType addr, " ", show addr, ", ", show addr']
+    show (IPhi ty rhs) = "phi " ++  ty
+      ++
+      intercalate
+      ","
+      (map
+         (\ (addr, label) -> concat ["[ ", show addr, ", %L", show label, "]"])
+         rhs)
+    show (IBinOp op addr addr') = concat [op, " ", show addr, ", ", show addr']
+    show (IRet ty addr) = concat ["ret ", ty, " ", show addr]
+    show IVRet = "ret void"
+    show (IStringLiteralDef sl) = show sl
+    show (ILabel l) = concat ["L", show l, ":"]
+
+
 
 restore :: Store -> GenM ()
 restore st = modify (\s -> s {store = st})
@@ -68,8 +152,9 @@ saveStringLiteral str = do
   modify (\s -> s {stringLiterals = sl : stringLiterals s})
   return id
 
-addStringLiteralsDefinitions :: [StringLiteral] -> GenM ()
-addStringLiteralsDefinitions = mapM_ (emit . show)
+addStringLiteralsDefinitions :: [StringLiteral] -> String -> IO ()
+addStringLiteralsDefinitions literals filename 
+  = mapM_  (\sl -> appendFile filename $ printIntermediateInstr (Nothing, IStringLiteralDef sl)) literals
 
 freshId :: GenM Int
 freshId = do
@@ -81,8 +166,11 @@ freshId = do
 freshLabel :: GenM Label
 freshLabel = freshId
 
-emit :: Instr -> GenM ()
-emit instr = modify (\s -> s {revCode = instr : revCode s})
+emit :: IntermediateInstr -> GenM ()
+emit instr = do
+  b <- getBlock
+  let b' = b { instrs = instr : instrs b }
+  modifyBlock b'
 
 genAddr :: Types.LatteType -> GenM Address
 genAddr Types.Bool = fmap BoolAddr freshId
@@ -131,7 +219,9 @@ initialState =
       revCode = [],
       functionTypes = M.empty,
       stringLiterals = [],
-      lastLabel = 1
+      lastLabel = -1,
+      blocks = M.empty,
+      currentBlock = -1
     }
 
 runGen :: GenM a -> IO (a, GenState)
