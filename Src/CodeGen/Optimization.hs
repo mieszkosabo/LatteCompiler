@@ -1,7 +1,6 @@
 module Src.CodeGen.Optimization where
 import Src.CodeGen.State
 import Data.List ( (\\), nub, find )
-import MonadUtils (MonadIO(liftIO))
 import Control.Monad.List (forM_, foldM, when)
 import Data.Bifunctor (second)
 import qualified Data.Map as M
