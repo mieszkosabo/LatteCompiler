@@ -98,7 +98,7 @@ checkSingleFunction env (FnDef pos t (Ident ident) args (Block _ stmts)) = do
     (throwError $ DifferentReturnTypes pos)
   when
     (stripPositionFromType t /= head retTypesWithoutDuplicates)
-    (throwError $ MainFunctionMustReturnInt pos)
+    (throwError $ ReturnTypeVary pos (show $ stripPositionFromType t) (show $ head retTypesWithoutDuplicates))
 
 checkFunctions :: TEnv -> [TopDef] -> StaticCheck ()
 checkFunctions env topdefs = forM_ topdefs (checkSingleFunction env)

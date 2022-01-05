@@ -8,7 +8,6 @@ import Data.List (intercalate, isPrefixOf)
 import qualified Data.Map as M
 import Parser.AbsLatte
 import Src.CodeGen.State
-import Src.CodeGen.State (GenState (GenState))
 import Src.Frontend.Types (stripPositionFromType)
 
 argsTypes :: [Arg] -> [String]
@@ -33,22 +32,26 @@ isImplicitReturn :: GenState -> Bool
 isImplicitReturn = not . isExplicitReturn
 
 isExplicitReturn :: GenState -> Bool
-isExplicitReturn st = "\tret" `isPrefixOf` head (revCode st)
+isExplicitReturn st = case head (instrs b) of
+  (_, IRet _ _) -> True
+  (_, IVRet) -> True
+  _ -> False
+  where b = blocks st M.! currentBlock st
 
-placeLabel :: Label -> Instr
-placeLabel l = concat ["\tL", show l, ":"]
+placeLabel :: Label -> IntermediateInstr 
+placeLabel l = (Nothing, ILabel l) 
 
 useLabel :: Label -> String
 useLabel l = "label %L" ++ show l
 
-goto :: Label -> Instr
-goto l = unwords ["\tbr", useLabel l]
+goto :: Label -> IntermediateInstr 
+goto l = (Nothing, IGoto l)
 
-branch :: Address -> Label -> Label -> Instr
-branch a t e = unwords ["\tbr i1", show a, ",", useLabel t, ",", useLabel e]
+branch :: Address -> Label -> Label -> IntermediateInstr
+branch a t e = (Nothing, IBranch a t e)
 
-icmp :: String -> Address -> Address -> Address -> Instr
-icmp comp c a a' = concat ["\t", show c, " = icmp ", comp, " ", addrToLLVMType a, "  ", show a, ",", show a']
+icmp :: String -> Address -> Address -> Address -> IntermediateInstr
+icmp comp c a a' = (Just c, ICmp comp a a')
 
 createPhiNodes :: Label -> [(Label, Store)] -> GenM ()
 createPhiNodes currLabel pairs = do
@@ -60,12 +63,17 @@ createPhiNodes currLabel pairs = do
       let addr = s M.! loc
       let tmp = WithLabel varname currLabel addr
       let phiRhs = createPhiNode loc pairs
-      emit $ concat ["\t", show tmp, " = phi " ++ addrToLLVMType addr, intercalate "," phiRhs]
-      setVar varname tmp
+      unless 
+        (areAllTheSame $ map fst phiRhs) -- don't create redundant phi nodes
+        (
+          do 
+          emit (Just tmp, IPhi (addrToLLVMType addr) phiRhs)
+          setVar varname tmp
+        )
 
-createPhiNode :: Loc -> [(Label, Store)] -> [String]
+createPhiNode :: Loc -> [(Label, Store)] -> [(Address, Label)]
 createPhiNode _ [] = []
-createPhiNode loc ((l, s) : rest) = concat ["[ ", show addr, ", %L", show l, "]"] : createPhiNode loc rest
+createPhiNode loc ((l, s) : rest) =  (addr, l) : createPhiNode loc rest
   where
     addr = s M.! loc
 
@@ -78,3 +86,11 @@ wrapAllAddressesWithLabel l = do
         a <- getVar varname
         setVar varname (WithLabel varname l a)
     )
+
+areAllTheSame :: Eq a => [a] -> Bool
+areAllTheSame [] = True
+areAllTheSame (x:xs) = areAllTheSame' x xs
+
+areAllTheSame' :: Eq a => a -> [a] -> Bool
+areAllTheSame' e = foldr (\ x -> (&&) (e == x)) True
+

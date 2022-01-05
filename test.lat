@@ -1,0 +1,22 @@
+int main() {
+    int a = 1 + 2 + 3 + 4;
+    int b = 1 + 2 + 3 + 4;
+    int c = a + b;
+    printInt(c);    
+    return 0;
+}
+
+int fun(int a) {
+    int c = a * 2;
+    int d = a * 2;
+    return c + d;
+}
+
+int fun2(int x) {
+    int a = x + 2;
+    int b = x + 2;
+
+    int c = a + 1;
+    int d = b + 1;
+    return c + d;
+}
