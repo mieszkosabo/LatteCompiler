@@ -1,0 +1,20 @@
+int main() {
+    return 0;
+}
+
+int f(int a, int b, int c) {
+    int a2 = a + 1;
+    int b2 = b + 1;
+    if (1 == 0) {
+        int b3 = b + 1;
+        int c2 = c + 1;
+        printInt(b3);
+        printInt(c2);
+    }
+    int a4 = a + 1;
+    int c3 = c + 1;
+    printInt(a4);
+    printInt(c3);
+    
+    return 0;
+}

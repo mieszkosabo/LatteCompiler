@@ -8,7 +8,6 @@ import Data.List (intercalate, isPrefixOf)
 import qualified Data.Map as M
 import Parser.AbsLatte
 import Src.CodeGen.State
-import Src.CodeGen.State (GenState (GenState))
 import Src.Frontend.Types (stripPositionFromType)
 
 argsTypes :: [Arg] -> [String]
@@ -64,8 +63,13 @@ createPhiNodes currLabel pairs = do
       let addr = s M.! loc
       let tmp = WithLabel varname currLabel addr
       let phiRhs = createPhiNode loc pairs
-      emit (Just tmp, IPhi (addrToLLVMType addr) phiRhs)
-      setVar varname tmp
+      unless 
+        (areAllTheSame $ map fst phiRhs) -- don't create redundant phi nodes
+        (
+          do 
+          emit (Just tmp, IPhi (addrToLLVMType addr) phiRhs)
+          setVar varname tmp
+        )
 
 createPhiNode :: Loc -> [(Label, Store)] -> [(Address, Label)]
 createPhiNode _ [] = []
@@ -82,3 +86,11 @@ wrapAllAddressesWithLabel l = do
         a <- getVar varname
         setVar varname (WithLabel varname l a)
     )
+
+areAllTheSame :: Eq a => [a] -> Bool
+areAllTheSame [] = True
+areAllTheSame (x:xs) = areAllTheSame' x xs
+
+areAllTheSame' :: Eq a => a -> [a] -> Bool
+areAllTheSame' e = foldr (\ x -> (&&) (e == x)) True
+
