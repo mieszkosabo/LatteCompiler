@@ -55,17 +55,18 @@ clearBlocks = modify $ \s -> s { blocks = M.empty }
 data Block = LLVMBlock {
     label :: Label,
     instrs :: [IntermediateInstr],
-    preds :: [Label]
+    preds :: [Label],
+    succs :: [Label]
 } deriving Eq
 
 instance Show Block where
-  show (LLVMBlock _ instrs _) = unlines (map printIntermediateInstr (reverse instrs))
+  show (LLVMBlock _ instrs _ _) = unlines (map printIntermediateInstr (reverse instrs))
 
 
 addBlock :: [Label] -> GenM Label
 addBlock preds = do
   id <- freshLabel
-  let newBlock = LLVMBlock { label = id, instrs = [], preds = preds }
+  let newBlock = LLVMBlock { label = id, instrs = [], preds = preds, succs = [] }
   modify $ \s -> s { blocks = M.insert id newBlock (blocks s)}
   return id
 
@@ -84,6 +85,12 @@ modifyBlock :: Block -> GenM ()
 modifyBlock new = do
   active <- gets currentBlock
   modify $ \s -> s { blocks = M.insert active new (blocks s)}
+
+addSuccsToCurrentBlock :: [Label] -> GenM ()
+addSuccsToCurrentBlock newSuccs = do
+  active <- getBlock
+  let new = active { succs = succs active ++ newSuccs }
+  modifyBlock new
 
 -- examples: 
 -- %t1 = add 4, 3 ----> (just %t1, IAdd 4 3)
@@ -179,6 +186,16 @@ freshLabel :: GenM Label
 freshLabel = freshId
 
 emit :: IntermediateInstr -> GenM ()
+emit instr@(_, IBranch _ l l') = do
+  addSuccsToCurrentBlock [l, l']
+  b <- getBlock
+  let b' = b { instrs = instr : instrs b }
+  modifyBlock b'
+emit instr@(_, IGoto l) = do
+  addSuccsToCurrentBlock [l]
+  b <- getBlock
+  let b' = b { instrs = instr : instrs b }
+  modifyBlock b'
 emit instr = do
   b <- getBlock
   let b' = b { instrs = instr : instrs b }

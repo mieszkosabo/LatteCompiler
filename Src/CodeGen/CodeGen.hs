@@ -11,7 +11,7 @@ import Src.CodeGen.Utils
 import Src.Frontend.Types (stripPositionFromType)
 import qualified Src.Frontend.Types as Types
 import System.IO
-import Src.CodeGen.Optimization (lcse)
+import Src.CodeGen.Optimization (lcse, gcse)
 
 genCode :: [TopDef] -> String -> GenM ()
 genCode topdefs filename = do
@@ -40,10 +40,18 @@ genCode' (f : fs) filename = do
   when
     (isImplicitReturn st)
     (emit (Nothing, IVRet))
+  blks <- gets blocks
+  forM_ (M.elems blks) (\b -> do
+    b' <- lcse b
+    setBlock $ label b'
+    modifyBlock b'
+    )
+  
+  gcse
+
   blocks <- gets blocks
   forM_ (M.elems blocks) (\b -> do
-    b' <- lcse b
-    liftIO $ appendFile filename $ show b'
+    liftIO $ appendFile filename $ show b
     )
 
   liftIO $ appendFile filename "}\n"
