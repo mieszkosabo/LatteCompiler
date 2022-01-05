@@ -50,8 +50,7 @@ data GenState = GenState
   }
   deriving (Show)
 
-clearBlocks :: GenM ()
-clearBlocks = modify $ \s -> s { blocks = M.empty }
+-- Blocks are the vertices of the Control Flow Graph
 data Block = LLVMBlock {
     label :: Label,
     instrs :: [IntermediateInstr],
@@ -62,6 +61,8 @@ data Block = LLVMBlock {
 instance Show Block where
   show (LLVMBlock _ instrs _ _) = unlines (map printIntermediateInstr (reverse instrs))
 
+clearBlocks :: GenM ()
+clearBlocks = modify $ \s -> s { blocks = M.empty }
 
 addBlock :: [Label] -> GenM Label
 addBlock preds = do
@@ -92,9 +93,10 @@ addSuccsToCurrentBlock newSuccs = do
   let new = active { succs = succs active ++ newSuccs }
   modifyBlock new
 
+-- IR that is 1:1 LLVM, but easier to optimize than plain text
 -- examples: 
--- %t1 = add 4, 3 ----> (just %t1, IAdd 4 3)
--- ret 42         ----> (Nothing, IRet 42)
+-- %t1 = add 4, 3 ----> (just %t1, IBinOp "add i32" (ImmediateInt 4) (ImmediateInt 3))
+-- ret 42         ----> (Nothing, IRet (ImmediateInt 42))
 type IntermediateInstr = (Maybe Address, LLVMInstr) 
 
 printIntermediateInstr :: IntermediateInstr -> String

@@ -41,12 +41,13 @@ genCode' (f : fs) filename = do
     (isImplicitReturn st)
     (emit (Nothing, IVRet))
   blks <- gets blocks
+
+  -- optimizations
   forM_ (M.elems blks) (\b -> do
     b' <- lcse b
     setBlock $ label b'
     modifyBlock b'
     )
-  
   gcse
 
   blocks <- gets blocks
