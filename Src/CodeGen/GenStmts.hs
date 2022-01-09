@@ -161,7 +161,11 @@ declareItem :: Types.LatteType -> Item -> GenM Env
 declareItem t (NoInit _ (Ident ident)) = do
   addr <- case t of
     Types.Int -> return $ ImmediateInt 0
-    Types.Str -> genAddr Types.Str
+    Types.Str -> do 
+      id <- saveStringLiteral ""
+      addr <- genAddr Types.Str
+      emit (Just addr, IBitCast 1 id)
+      return addr
     Types.Bool -> return $ ImmediateBool 0
     _ -> undefined
   (_, env) <- declareVar ident addr
