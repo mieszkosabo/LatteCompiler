@@ -18,6 +18,26 @@ evalExprType (ELitInt _ _) = return Int
 evalExprType (ELitTrue _) = return Bool
 evalExprType (ELitFalse _) = return Bool
 evalExprType (EString _ _) = return Str
+evalExprType (ENewArr pos t e) = do
+  arrSizeType <- evalExprType e
+  let arrType = stripPositionFromType t
+  when (arrSizeType /= Int) (throwError $ OtherError pos "Array size must be an int")
+  case arrType of
+    (Array _) -> throwError $ OtherError pos "Arrays must be 1 dimensional"
+    _ -> return $ Array arrType
+evalExprType (EProp pos e (Ident propName)) = do
+  leftDotSide <- evalExprType e
+  case leftDotSide of
+    (Array _) -> if propName == "length" then return Int else throwError $ OtherError pos "Arrays don't have properties other than `length`"
+    -- TODO: objects
+    _ -> throwError $ OtherError pos $ "Can't read property `" ++ propName ++ "` of " ++ show leftDotSide
+evalExprType (EArrGet pos e e') = do
+  arrT <- evalExprType e
+  idxT <- evalExprType e'
+  when (idxT /= Int) (throwError $ OtherError pos "Indices must be integers")
+  case arrT of
+    (Array t) -> return t
+    _ -> throwError $ OtherError pos $ "Can't read index from " ++ show arrT
 evalExprType (Not pos e) = do
   t <- evalExprType e
   if t /= Bool

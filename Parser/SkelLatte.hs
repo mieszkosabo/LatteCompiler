@@ -40,7 +40,7 @@ transStmt x = case x of
   Parser.AbsLatte.Empty _ -> failure x
   Parser.AbsLatte.BStmt _ block -> failure x
   Parser.AbsLatte.Decl _ type_ items -> failure x
-  Parser.AbsLatte.Ass _ ident expr -> failure x
+  Parser.AbsLatte.Ass _ expr1 expr2 -> failure x
   Parser.AbsLatte.Incr _ ident -> failure x
   Parser.AbsLatte.Decr _ ident -> failure x
   Parser.AbsLatte.Ret _ expr -> failure x
@@ -49,6 +49,7 @@ transStmt x = case x of
   Parser.AbsLatte.CondElse _ expr stmt1 stmt2 -> failure x
   Parser.AbsLatte.While _ expr stmt -> failure x
   Parser.AbsLatte.SExp _ expr -> failure x
+  Parser.AbsLatte.For _ type_ ident expr stmt -> failure x
 
 transItem :: Show a => Parser.AbsLatte.Item' a -> Result
 transItem x = case x of
@@ -61,6 +62,8 @@ transType x = case x of
   Parser.AbsLatte.Str _ -> failure x
   Parser.AbsLatte.Bool _ -> failure x
   Parser.AbsLatte.Void _ -> failure x
+  Parser.AbsLatte.List _ type_ -> failure x
+  Parser.AbsLatte.ClassType _ ident -> failure x
   Parser.AbsLatte.Fun _ type_ types -> failure x
 
 transExpr :: Show a => Parser.AbsLatte.Expr' a -> Result
@@ -69,7 +72,10 @@ transExpr x = case x of
   Parser.AbsLatte.ELitInt _ integer -> failure x
   Parser.AbsLatte.ELitTrue _ -> failure x
   Parser.AbsLatte.ELitFalse _ -> failure x
+  Parser.AbsLatte.ENewArr _ type_ expr -> failure x
   Parser.AbsLatte.EApp _ ident exprs -> failure x
+  Parser.AbsLatte.EProp _ expr ident -> failure x
+  Parser.AbsLatte.EArrGet _ expr1 expr2 -> failure x
   Parser.AbsLatte.EString _ string -> failure x
   Parser.AbsLatte.Neg _ expr -> failure x
   Parser.AbsLatte.Not _ expr -> failure x

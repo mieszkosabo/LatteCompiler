@@ -39,7 +39,7 @@ data Stmt' a
     = Empty a
     | BStmt a (Block' a)
     | Decl a (Type' a) [Item' a]
-    | Ass a Ident (Expr' a)
+    | Ass a (Expr' a) (Expr' a)
     | Incr a Ident
     | Decr a Ident
     | Ret a (Expr' a)
@@ -48,6 +48,7 @@ data Stmt' a
     | CondElse a (Expr' a) (Stmt' a) (Stmt' a)
     | While a (Expr' a) (Stmt' a)
     | SExp a (Expr' a)
+    | For a (Type' a) Ident (Expr' a) (Stmt' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Item = Item' BNFC'Position
@@ -56,7 +57,13 @@ data Item' a = NoInit a Ident | Init a Ident (Expr' a)
 
 type Type = Type' BNFC'Position
 data Type' a
-    = Int a | Str a | Bool a | Void a | Fun a (Type' a) [Type' a]
+    = Int a
+    | Str a
+    | Bool a
+    | Void a
+    | List a (Type' a)
+    | ClassType a Ident
+    | Fun a (Type' a) [Type' a]
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Expr = Expr' BNFC'Position
@@ -65,7 +72,10 @@ data Expr' a
     | ELitInt a Integer
     | ELitTrue a
     | ELitFalse a
+    | ENewArr a (Type' a) (Expr' a)
     | EApp a Ident [Expr' a]
+    | EProp a (Expr' a) Ident
+    | EArrGet a (Expr' a) (Expr' a)
     | EString a String
     | Neg a (Expr' a)
     | Not a (Expr' a)
@@ -136,6 +146,7 @@ instance HasPosition Stmt where
     CondElse p _ _ _ -> p
     While p _ _ -> p
     SExp p _ -> p
+    For p _ _ _ _ -> p
 
 instance HasPosition Item where
   hasPosition = \case
@@ -148,6 +159,8 @@ instance HasPosition Type where
     Str p -> p
     Bool p -> p
     Void p -> p
+    List p _ -> p
+    ClassType p _ -> p
     Fun p _ _ -> p
 
 instance HasPosition Expr where
@@ -156,7 +169,10 @@ instance HasPosition Expr where
     ELitInt p _ -> p
     ELitTrue p -> p
     ELitFalse p -> p
+    ENewArr p _ _ -> p
     EApp p _ _ -> p
+    EProp p _ _ -> p
+    EArrGet p _ _ -> p
     EString p _ -> p
     Neg p _ -> p
     Not p _ -> p
