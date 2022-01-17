@@ -71,6 +71,7 @@ genStmt (CondElse _ e thenSt elseSt) = do
       elseLabel <- addBlock [l]
       finLabel <- addBlock [ifLabel, elseLabel]
       emit $ branch cond ifLabel elseLabel
+      addSuccsToCurrentBlock [finLabel]
       entryStore <- gets store
 
       -- if block
@@ -117,6 +118,7 @@ genStmt (Cond pos e thenStmt) = do
       ifLabel <- addBlock [l]
       finLabel <- addBlock [l, ifLabel]
       emit $ branch cond ifLabel finLabel
+      addSuccsToCurrentBlock [finLabel]
       entryStore <- gets store
 
       -- if block
@@ -171,6 +173,7 @@ genStmt (While _ e bodyStmt) = do
   createPhiNodes condLabel [(lastBodyLabel, bodyStore), (lastEntryLabel, entryStore)]
   cond <- genExpr e
   emit $ branch cond bodyLabel finLabel
+  addSuccsToCurrentBlock [finLabel]
 
   -- finalBlock
   setBlock finLabel

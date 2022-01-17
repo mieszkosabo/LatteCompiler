@@ -43,13 +43,13 @@ genCode' (f : fs) filename = do
     (emit (Nothing, IVRet))
   blks <- gets blocks
 
-  -- optimizations -- FIXME:
-  -- forM_ (M.elems blks) (\b -> do
-  --   b' <- lcse b
-  --   setBlock $ label b'
-  --   modifyBlock b'
-  --   )
-  -- gcse
+  -- optimizations 
+  forM_ (M.elems blks) (\b -> do
+    b' <- lcse b
+    setBlock $ label b'
+    modifyBlock b'
+    )
+  gcse
 
   blocks <- gets blocks
   forM_ (M.elems blocks) (\b -> do
@@ -86,4 +86,4 @@ addInternalFunctions filename =
   appendFile filename "declare i8* @__concat(i8*, i8*)\n"
 
 addArrType :: String -> IO ()
-addArrType filename = appendFile filename $ intercalate "\n" ["%Arr = type {", "\ti32*,", "\ti32", "}"]
+addArrType filename = appendFile filename $ intercalate "\n" ["%Arr = type {", "\ti32*,", "\ti32", "}\n"]

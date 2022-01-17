@@ -226,7 +226,6 @@ freshLabel = freshId
 
 emit :: IntermediateInstr -> GenM ()
 emit instr@(_, IBranch _ l l') = do
-  addSuccsToCurrentBlock [l, l']
   b <- getBlock
   let b' = b { instrs = instr : instrs b }
   modifyBlock b'
