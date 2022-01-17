@@ -5,10 +5,11 @@ import Control.Monad.State
 import Data.List (intercalate)
 import qualified Data.Map as M
 import Parser.AbsLatte
-import Src.CodeGen.GenExpr (emitBinaryOp, genExpr)
+import Src.CodeGen.GenExpr (emitBinaryOp, genExpr, getElementPointer)
 import Src.CodeGen.State
 import Src.CodeGen.Utils
 import qualified Src.Frontend.Types as Types
+import Src.Frontend.EvalExprType (evalExprType)
 
 foldEnv :: (a -> GenM Env) -> [a] -> GenM Env
 foldEnv fun l = do
@@ -30,9 +31,28 @@ genStmt (Ret _ e) = do
   emit (Nothing, IRet (addrToLLVMType addr) addr)
   ask
 genStmt (VRet _) = emit (Nothing, IVRet) >> ask
-genStmt (Ass _ (Ident ident) e) = do
+genStmt (Ass _ (EVar _ (Ident ident)) e) = do
   addr <- genExpr e
   setVar ident addr
+  ask
+genStmt (Ass _ e e') = do
+  (lhs, ty) <- getElementPointer e
+  rhs <- genExpr e'
+  emit (Nothing, IStore (show ty) rhs lhs)
+  ask
+genStmt (For _ ty (Ident ident) e stmt) = do
+  iteratorId <- freshId
+  let i = "it" ++ show iteratorId
+  (_, env) <- declareVar i (ImmediateInt 0)
+  local (const env) $ genStmt (While 
+    Nothing 
+    (ERel Nothing (EVar Nothing (Ident i)) (LTH Nothing) (EProp Nothing e (Ident "length")))
+    (BStmt Nothing (Block Nothing [
+      Decl Nothing ty [Init Nothing (Ident ident) (EArrGet Nothing e (EVar Nothing (Ident i)))],
+      stmt,
+      Incr Nothing (Ident i)
+    ]))
+    )
   ask
 genStmt (CondElse _ e thenSt elseSt) = do
   cond <- genExpr e
@@ -164,7 +184,7 @@ declareItem t (NoInit _ (Ident ident)) = do
     Types.Str -> do 
       id <- saveStringLiteral ""
       addr <- genAddr Types.Str
-      emit (Just addr, IBitCast 1 id)
+      emit (Just addr, IBitCast "[1 x i8]*" id "i8*")
       return addr
     Types.Bool -> return $ ImmediateBool 0
     _ -> undefined

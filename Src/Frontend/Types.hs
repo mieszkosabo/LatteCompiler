@@ -84,7 +84,7 @@ instance Show LatteType where
   show Bool = "i1"
   show Void = "void"
   show (Fun t ts) = show t ++ " (" ++ concatMap show ts ++ ")"
-  show (Array t) = "[" ++ show t ++ "]"
+  show (Array t) = "%Arr*"
 
 -- build in functions types
 printIntType :: LatteType
@@ -108,7 +108,8 @@ predefinedFunctionsTypes =
     ("printString", printStringType),
     ("error", errorType),
     ("readInt", readIntType),
-    ("readString", readStringType)
+    ("readString", readStringType),
+    ("malloc", Fun Str [Int])
   ]
 
 stripPositionFromType :: Abs.Type -> LatteType

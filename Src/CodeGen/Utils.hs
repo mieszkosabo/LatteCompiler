@@ -8,7 +8,7 @@ import Data.List (intercalate, isPrefixOf)
 import qualified Data.Map as M
 import Parser.AbsLatte
 import Src.CodeGen.State
-import Src.Frontend.Types (stripPositionFromType)
+import Src.Frontend.Types (stripPositionFromType, LatteType (Array, Int))
 
 argsTypes :: [Arg] -> [String]
 argsTypes [] = []
@@ -21,7 +21,8 @@ addArgsToEnv args = do
   where
     f = \(addresses, env) (Arg _ t (Ident ident)) -> local (const env) $ fun t addresses ident -- (b -> a -> m b)
     fun = \ty addresses ident -> do
-      addr <- genAddr $ stripPositionFromType ty
+      let t = stripPositionFromType ty
+      addr <- genAddr t
       (addr, env') <- declareVar ident addr
       return (addr : addresses, env')
 
@@ -64,7 +65,7 @@ createPhiNodes currLabel pairs = do
       let tmp = WithLabel varname currLabel addr
       let phiRhs = createPhiNode loc pairs
       unless 
-        (areAllTheSame $ map fst phiRhs) -- don't create redundant phi nodes
+        (areAllTheSame (map fst phiRhs) || isPointerAddr addr) -- don't create redundant phi nodes
         (
           do 
           emit (Just tmp, IPhi (addrToLLVMType addr) phiRhs)
@@ -84,7 +85,7 @@ wrapAllAddressesWithLabel l = do
     (M.keys env)
     ( \varname -> do
         a <- getVar varname
-        setVar varname (WithLabel varname l a)
+        unless (isPointerAddr a) (setVar varname (WithLabel varname l a))
     )
 
 areAllTheSame :: Eq a => [a] -> Bool
@@ -94,3 +95,12 @@ areAllTheSame (x:xs) = areAllTheSame' x xs
 areAllTheSame' :: Eq a => a -> [a] -> Bool
 areAllTheSame' e = foldr (\ x -> (&&) (e == x)) True
 
+getLLVMTypeSize :: String -> Address -> GenM Address
+getLLVMTypeSize typeName multiplier = do
+  addr <- genPointerAddr
+  emit (Just addr, IGEPNull typeName)
+  size <- genAddr Src.Frontend.Types.Int
+  emit (Just size, IPtrToInt typeName addr)
+  multipliedSize <- genAddr  Src.Frontend.Types.Int
+  emit (Just multipliedSize, IMul size (ImmediateInt 32))
+  return multipliedSize
