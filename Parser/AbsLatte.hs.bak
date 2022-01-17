@@ -64,6 +64,9 @@ data Type' a
     | List a (Type' a)
     | ClassType a Ident
     | Fun a (Type' a) [Type' a]
+    | Arr a (Type' a) Integer
+    | Pointer a (Type' a)
+    | VTable a Ident
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Expr = Expr' BNFC'Position
@@ -162,6 +165,9 @@ instance HasPosition Type where
     List p _ -> p
     ClassType p _ -> p
     Fun p _ _ -> p
+    Arr p _ _ -> p
+    Pointer p _ -> p
+    VTable p _ -> p
 
 instance HasPosition Expr where
   hasPosition = \case

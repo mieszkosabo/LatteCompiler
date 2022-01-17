@@ -115,7 +115,7 @@ Stmt
   : ';' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.Empty (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1))) }
   | Block { (fst $1, Parser.AbsLatte.BStmt (fst $1) (snd $1)) }
   | Type ListItem ';' { (fst $1, Parser.AbsLatte.Decl (fst $1) (snd $1) (snd $2)) }
-  | Expr '=' Expr ';' { (fst $1, Parser.AbsLatte.Ass (fst $1) (snd $1) (snd $3)) }
+  | Ident '=' Expr ';' { (fst $1, Parser.AbsLatte.Ass (fst $1) (snd $1) (snd $3)) }
   | Ident '++' ';' { (fst $1, Parser.AbsLatte.Incr (fst $1) (snd $1)) }
   | Ident '--' ';' { (fst $1, Parser.AbsLatte.Decr (fst $1) (snd $1)) }
   | 'return' Expr ';' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.Ret (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1)) (snd $2)) }

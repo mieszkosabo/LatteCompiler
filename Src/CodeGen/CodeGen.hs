@@ -18,6 +18,7 @@ genCode topdefs filename = do
   addTopLevelDefs topdefs 
   addPredefinedFunctions filename
   liftIO $ addInternalFunctions filename
+  liftIO $ addArrType filename
   genCode' topdefs filename
   st <- get
   liftIO $ addStringLiteralsDefinitions (stringLiterals st) filename
@@ -42,7 +43,7 @@ genCode' (f : fs) filename = do
     (emit (Nothing, IVRet))
   blks <- gets blocks
 
-  -- optimizations
+  -- optimizations 
   forM_ (M.elems blks) (\b -> do
     b' <- lcse b
     setBlock $ label b'
@@ -81,5 +82,8 @@ addPredefinedFunctions filename =
     Types.predefinedFunctionsTypes
 
 addInternalFunctions :: String -> IO ()
-addInternalFunctions filename = do
+addInternalFunctions filename =
   appendFile filename "declare i8* @__concat(i8*, i8*)\n"
+
+addArrType :: String -> IO ()
+addArrType filename = appendFile filename $ intercalate "\n" ["%Arr = type {", "\ti32*,", "\ti32", "}\n"]

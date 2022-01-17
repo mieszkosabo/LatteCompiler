@@ -71,15 +71,24 @@ checkStmt (Decl pos t items) ls = do
   let latteType = stripPositionFromType t
   (env', ls') <- addItemsToEnv latteType env ls items $ repeat True
   return (env', [Return Nothing], ls')
-checkStmt (Ass pos (Ident ident) e) ls = do
+checkStmt (Ass pos lhs rhs) ls = do
   env <- ask
-  let maybeT = M.lookup ident env
-  when (isNothing maybeT) (throwError $ UseOfUndeclaredName pos ident)
-  let Just (t, isMutable) = maybeT
-  exprType <- evalExprType e
-  when (exprType /= t) (throwError $ TypeAssertFailed pos (show t) (show exprType))
-  unless isMutable (throwError $ FunctionArgumentModification pos)
+  lhsType <- evalExprType lhs
+  rhsType <- evalExprType rhs
+  when (rhsType /= lhsType) (throwError $ TypeAssertFailed pos (show lhsType) (show rhsType))
   return (env, [Return Nothing], ls)
+checkStmt (For pos t (Ident ident) e stmt) ls = do
+  env <- ask
+  arr <- evalExprType e
+  let iteratorT = stripPositionFromType t
+  case arr of 
+    (Array arrT) -> if arrT /= iteratorT 
+      then throwError $ OtherError pos "Type mismatch between iterator type and array type"
+      else do
+        (env', ls') <- addIdentToEnv ls iteratorT ident True
+        local (const env') $ checkStmt stmt ls'
+        return (env, [Return Nothing], ls)
+    _ -> throwError $ OtherError pos "For loop can be used only with an array"
 checkStmt (Incr pos (Ident ident)) ls = do
   env <- ask
   case M.lookup ident env of

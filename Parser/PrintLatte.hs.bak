@@ -205,6 +205,9 @@ instance Print (Parser.AbsLatte.Type' a) where
     Parser.AbsLatte.List _ type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "[]")])
     Parser.AbsLatte.ClassType _ id_ -> prPrec i 0 (concatD [prt 0 id_])
     Parser.AbsLatte.Fun _ type_ types -> prPrec i 0 (concatD [prt 0 type_, doc (showString "("), prt 0 types, doc (showString ")")])
+    Parser.AbsLatte.Arr _ type_ n -> prPrec i 0 (concatD [prt 0 type_, doc (showString "["), prt 0 n, doc (showString "]")])
+    Parser.AbsLatte.Pointer _ type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "*")])
+    Parser.AbsLatte.VTable _ id_ -> prPrec i 0 (concatD [prt 0 id_])
 
 instance Print [Parser.AbsLatte.Type' a] where
   prt _ [] = concatD []

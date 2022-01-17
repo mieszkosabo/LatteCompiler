@@ -41,6 +41,7 @@ data TypeCheckErrors
   | MainFunctionMustReturnInt Pos
   | DifferentReturnTypes Pos
   | FunctionArgumentModification Pos
+  | InvalidAssignment Pos
   | OtherError Pos String
 
 addPositionInfo :: Pos -> String
@@ -59,6 +60,7 @@ instance Show TypeCheckErrors where
   show (MainFunctionMustReturnInt pos) = "Main function must return int" ++ addPositionInfo pos
   show (OtherError pos msg) = msg ++ addPositionInfo pos
   show (FunctionArgumentModification pos) = "Attempted to modify function argument " ++ addPositionInfo pos
+  show (InvalidAssignment pos) = "Invalid assignment" ++ addPositionInfo pos
 
 -- atm isMutable flag isn't much utilized, but might become handy when I add `const` modifier
 type TEnv = Map VarName (LatteType, Bool) -- (type, isMutable)
@@ -67,7 +69,14 @@ type LocalScope = [VarName]
 
 type StaticCheck = ReaderT TEnv (ExceptT TypeCheckErrors IO)
 
-data LatteType = Int | Str | Bool | Void | Fun LatteType [LatteType] deriving (Eq)
+data LatteType = 
+  Int 
+  | Str 
+  | Bool 
+  | Void 
+  | Fun LatteType [LatteType] 
+  | Array LatteType
+  deriving (Eq)
 
 instance Show LatteType where
   show Int = "i32"
@@ -75,6 +84,7 @@ instance Show LatteType where
   show Bool = "i1"
   show Void = "void"
   show (Fun t ts) = show t ++ " (" ++ concatMap show ts ++ ")"
+  show (Array t) = "%Arr*"
 
 -- build in functions types
 printIntType :: LatteType
@@ -98,7 +108,8 @@ predefinedFunctionsTypes =
     ("printString", printStringType),
     ("error", errorType),
     ("readInt", readIntType),
-    ("readString", readStringType)
+    ("readString", readStringType),
+    ("malloc", Fun Str [Int])
   ]
 
 stripPositionFromType :: Abs.Type -> LatteType
@@ -108,3 +119,4 @@ stripPositionFromType (Abs.Bool _) = Bool
 stripPositionFromType (Abs.Void _) = Void
 stripPositionFromType (Abs.Fun _ retType argTypes) =
   Fun (stripPositionFromType retType) (map stripPositionFromType argTypes)
+stripPositionFromType (Abs.List _ t) = Array $ stripPositionFromType t

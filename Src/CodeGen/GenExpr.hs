@@ -7,6 +7,7 @@ import Parser.AbsLatte
 import Src.CodeGen.State
 import Src.CodeGen.Utils
 import qualified Src.Frontend.Types as Types
+import Src.Frontend.Types (stripPositionFromType)
 
 genExpr :: Expr -> GenM Address
 genExpr (ELitInt _ n) = return $ ImmediateInt $ fromInteger n
@@ -30,7 +31,7 @@ genExpr (EApp _ (Ident ident) exprs) = do
 genExpr (EString _ str) = do
   id <- saveStringLiteral str
   addr <- genAddr Types.Str
-  emit (Just addr, IBitCast (length str + 1) id)
+  emit (Just addr, IBitCast ("[" ++ show (length str + 1) ++ " x i8]*") id "i8*")
   return addr
 genExpr (Not _ e) = do
   cond <- genExpr e
@@ -99,6 +100,67 @@ genExpr (EOr a e e') = do
   tmp <- genAddr Types.Bool
   emit (Just tmp, IPhi "i1" [(ImmediateBool 1, entryLabel), (ImmediateBool 1, lastMidLabel), (ImmediateBool 0, falseLabel)])
   return tmp
+genExpr (ENewArr _ t e) = do
+  len <- genExpr e
+  let ty = stripPositionFromType t
+  structAddrNotCasted <- genArrAddr ty
+  structAddr <- genArrAddr ty
+  size <- getLLVMTypeSize "%Arr" (ImmediateInt 1)
+  emit (Just structAddrNotCasted, ICall "i8*" "malloc" [("i32", size)])
+  emit (Just structAddr, IBitCast "i8*" (show structAddrNotCasted) "%Arr*")
+  innerArrId <- freshId
+  let arrAddr = ArrAddr ty innerArrId
+  arrTmp <- genPointerAddr
+  lenTimesSizeOfInt <- getLLVMTypeSize "i32" len
+  emit (Just arrTmp, ICall "i8*" "malloc" [("i32", lenTimesSizeOfInt)])
+  emit (Just arrAddr, IBitCast "i8*" (show arrTmp) (show ty ++ "*")) -- create inner arr
+  
+  -- set length
+  lengthAddr <- genPointerAddr 
+  emit (Just lengthAddr, IGEP "%Arr" structAddr [ImmediateInt 0, ImmediateInt 1])
+  emit (Nothing, IStore "i32" len lengthAddr)
+
+  -- set inner Arr
+  innerArrFieldAddr <- genPointerAddr
+  emit (Just innerArrFieldAddr, IGEP "%Arr" structAddr [ImmediateInt 0, ImmediateInt 0])
+  castedAddr <- genPointerAddr
+  emit (Just castedAddr, IBitCast (show ty ++ "*") (show arrAddr) "i32*")
+  emit (Nothing, IStore "i32*" castedAddr innerArrFieldAddr)
+
+  return structAddr
+
+genExpr arrGet@(EArrGet _ e e') = do
+  (valAddr, ty) <- getElementPointer arrGet
+  val <- genAddr ty
+  emit (Just val, ILoad (show ty) valAddr)
+  return val
+
+genExpr (EProp _ e (Ident ident)) = do
+  pointerAddr <- genExpr e
+  case pointerAddr of 
+    (ArrAddr t id) -> do
+      lenPointer <- genPointerAddr
+      emit (Just lenPointer, IGEP "%Arr" pointerAddr [ImmediateInt 0, ImmediateInt 1])
+      len <- genAddr Types.Int
+      emit (Just len, ILoad "i32" lenPointer)
+      return len 
+    _ -> undefined -- FIXME:
+
+-- gives pointer to element at idx in array or at propName in an object
+getElementPointer :: Expr -> GenM (Address, Types.LatteType)
+getElementPointer (EArrGet _ e e') = do
+  structPointer@(ArrAddr ty _) <- genExpr e
+  idx <- genExpr e'
+  innerArrPointer <- genPointerAddr
+  emit (Just innerArrPointer, IGEP "%Arr" structPointer [ImmediateInt 0, ImmediateInt 0])
+  innerArr <- genPointerAddr
+  emit (Just innerArr, ILoad "i32*" innerArrPointer)
+  casted <- genPointerAddr
+  emit (Just casted, IBitCast "i32*" (show innerArr) (show ty ++ "*"))
+  valAddr <- genPointerAddr
+  emit (Just valAddr, IGEP (show ty) casted [idx])
+  return (valAddr, ty)
+getElementPointer _ = undefined -- FIXME:
 
 addOpToLLVM :: AddOp -> String
 addOpToLLVM (Plus _) = "add i32"

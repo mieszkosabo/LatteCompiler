@@ -1,0 +1,21 @@
+int main() {
+    int[] a = new int[5];
+    int i = 0;
+    while (i < a.length) {
+        a[i] = i;
+        i++;
+    }
+    
+    int[] b = new int[a.length];
+    int i2 = 0;
+    for (int n : a) {
+        b[i2] = n * 2;
+        i2++;
+    }
+    for (int el : b) {
+        printInt(el);
+    }
+
+    return 0;
+}
+

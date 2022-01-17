@@ -9,7 +9,7 @@ import Data.Maybe (fromMaybe)
 
 lcse :: Block -> GenM Block
 lcse b = do
-    newB <- eliminateCommonSubExpressions b (instrs b)
+    newB <- eliminateCommonSubExpressions b (instrs b) True
     if b == newB 
         then return b 
         else lcse newB
@@ -27,7 +27,7 @@ gcse'bfs currentLabel instrsOnPath visited = do
   blks <- gets blocks
   let currBlock = blks M.! currentLabel
   -- find repetitions in my block from instrsOnPath and replace them
-  newB <- eliminateCommonSubExpressions currBlock (instrs currBlock ++ instrsOnPath)
+  newB <- eliminateCommonSubExpressions currBlock (instrs currBlock ++ instrsOnPath) False
   -- update blocks
   modify (\s -> s { blocks = M.insert currentLabel newB blks })  
   -- 'append' blocks instrs to instrsOnPath
@@ -63,8 +63,8 @@ replaceAddressesWithAddress addrs addr (IPhi ty phiRhs) = IPhi ty (map (\(a, l) 
 replaceAddressesWithAddress addrs addr (ICall ty s args) = ICall ty s (map (\(ss, a) -> if Just a `elem` addrs then (ss, addr) else (ss, a)) args)
 replaceAddressesWithAddress _ _ instr = instr 
 
-eliminateCommonSubExpressions :: Block -> [IntermediateInstr] -> GenM Block
-eliminateCommonSubExpressions b knownInstr = foldM (\b' (lhs, rhs) -> do
+eliminateCommonSubExpressions :: Block -> [IntermediateInstr] -> Bool -> GenM Block
+eliminateCommonSubExpressions b knownInstr hardReplace = foldM (\b' (lhs, rhs) -> do
         let repetitions = reverse $ filter (\(_, el) -> isCommonSubExpression  el rhs) knownInstr
         if null repetitions 
             then return b' 
@@ -73,6 +73,16 @@ eliminateCommonSubExpressions b knownInstr = foldM (\b' (lhs, rhs) -> do
                 let addrsToRemove = map fst $ tail repetitions
                 let withoutRepetitions = removeRepeatedInstrs b' addrsToRemove
                 let withReplacements = map (second (replaceAddressesWithAddress addrsToRemove repr)) (instrs withoutRepetitions)
+                when hardReplace ( do
+                    blks <- gets blocks
+                    forM_ (M.elems blks) (\b'' -> do
+                    unless (label b'' == label b) ( do
+                     let withReplacements' = map (second (replaceAddressesWithAddress addrsToRemove repr)) (instrs b'') 
+                     setBlock $ label b''
+                     modifyBlock $ b'' { instrs = withReplacements' }
+                      )
+                    )
+                  )
                 return b' { instrs = withReplacements }
         )
         b 

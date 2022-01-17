@@ -65,6 +65,9 @@ transType x = case x of
   Parser.AbsLatte.List _ type_ -> failure x
   Parser.AbsLatte.ClassType _ ident -> failure x
   Parser.AbsLatte.Fun _ type_ types -> failure x
+  Parser.AbsLatte.Arr _ type_ integer -> failure x
+  Parser.AbsLatte.Pointer _ type_ -> failure x
+  Parser.AbsLatte.VTable _ ident -> failure x
 
 transExpr :: Show a => Parser.AbsLatte.Expr' a -> Result
 transExpr x = case x of
