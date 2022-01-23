@@ -180,7 +180,7 @@ isCommonSubExpression _ _ = False
 
 instance Show LLVMInstr where
     show (IMul addr addr') = concat ["mul i32", show addr, ", ", show addr']
-    show (ICall ty name args) = concat ["call ", ty, " @", name, "(", argsString, ")"]
+    show (ICall ty name args) = concat ["call ", ty, name, "(", argsString, ")"]
         where argsString = intercalate ", " $ map (\(argTy, arg) -> argTy ++ " " ++ show arg) args
     show (IBitCast ty1 val ty2 ) = concat ["bitcast ", ty1, " ", val, " to ", ty2]
     show (IGoto label) = "br label %L" ++ show label
@@ -313,7 +313,19 @@ setVar ident addr = do
   st <- get
   let loc = M.lookup ident env
   case loc of
-    Just l -> modify (\s -> s {store = M.insert l addr (store s)})
+    Just l -> do
+      stor <- gets store 
+      let oldAddr = stor M.! l
+      modify (\s -> s {store = M.insert l addr (store s)})
+      when (isClassPointer oldAddr) (do
+        let (PointerAddr _ n) = unWrapAddr oldAddr
+        let (PointerAddr _ n') = unWrapAddr addr
+        when (n /= n') (do
+          casted <- genPointerAddr n
+          emit (Just casted, IBitCast ("%" ++ n' ++ "*") (show addr) ("%" ++ n ++ "*"))
+          modify (\s -> s {store = M.insert l casted (store s)})
+          )
+        )
     Nothing -> do
       (Just cls) <- gets currentClass
       attrPointer <- genTempPointerAddr
@@ -321,6 +333,9 @@ setVar ident addr = do
       thisAddr <- getVar "self"
       emit (Just attrPointer, IGEP ("%" ++ name cls) (show thisAddr) [ImmediateInt 0, ImmediateInt attrIdx])
       emit (Nothing, IStore (show ty) addr attrPointer)
+
+isClassPointer PointerAddr {} = True
+isClassPointer _  = False
 
 declareVar :: VarName -> Address -> GenM (Address, Env)
 declareVar ident addr = do

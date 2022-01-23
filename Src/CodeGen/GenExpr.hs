@@ -24,11 +24,11 @@ genExpr (EApp _ (Ident ident) exprs) = do
   let argsString = createArgString types args
   case t of
     Types.Void -> do
-      emit (Nothing, ICall "void" ident (zip types args))
+      emit (Nothing, ICall "void" ("@" ++ ident) (zip types args))
       return $ ImmediateInt 1
     _ -> do
       temp <- genAddr t
-      emit (Just temp, ICall (show t) ident (zip types args))
+      emit (Just temp, ICall (show t) ("@" ++ ident) (zip types args))
       return temp
 genExpr (EString _ str) = do
   id <- saveStringLiteral str
@@ -108,13 +108,13 @@ genExpr (ENewArr _ t e) = do
   structAddrNotCasted <- genArrAddr ty
   structAddr <- genArrAddr ty
   size <- getLLVMTypeSize "%Arr" (ImmediateInt 1)
-  emit (Just structAddrNotCasted, ICall "i8*" "malloc" [("i32", size)])
+  emit (Just structAddrNotCasted, ICall "i8*" "@malloc" [("i32", size)])
   emit (Just structAddr, IBitCast "i8*" (show structAddrNotCasted) "%Arr*")
   innerArrId <- freshId
   let arrAddr = ArrAddr ty innerArrId
   arrTmp <- genTempPointerAddr
   lenTimesSizeOfInt <- getLLVMTypeSize "i32" len
-  emit (Just arrTmp, ICall "i8*" "malloc" [("i32", lenTimesSizeOfInt)])
+  emit (Just arrTmp, ICall "i8*" "@malloc" [("i32", lenTimesSizeOfInt)])
   emit (Just arrAddr, IBitCast "i8*" (show arrTmp) (show ty ++ "*")) -- create inner arr
   
   -- set length
@@ -161,9 +161,9 @@ genExpr (ENewClass _ (ClassType _ (Ident clsName))) = do
   ptrAddr <- genPointerAddr clsName
   ptrAddrNotCasted <- genTempPointerAddr
   size <- getLLVMTypeSize ("%" ++ clsName) (ImmediateInt 1)
-  emit (Just ptrAddrNotCasted, ICall "i8*" "malloc" [("i32", size)])
+  emit (Just ptrAddrNotCasted, ICall "i8*" "@malloc" [("i32", size)])
   emit (Just ptrAddr, IBitCast "i8*" (show ptrAddrNotCasted) ("%" ++ clsName ++ "*"))
-  emit (Nothing, ICall "void" (clsName ++ "_constructor") [("%" ++ clsName ++ "*", ptrAddr)])
+  emit (Nothing, ICall "void" ("@" ++ clsName ++ "_constructor") [("%" ++ clsName ++ "*", ptrAddr)])
   return ptrAddr
 genExpr (ENullCast _ (Ident clsName)) = return $ NullPtr ("%" ++ clsName ++ "*")
 genExpr (EPropApp _ e (Ident ident) exprs) = do
@@ -184,6 +184,7 @@ genExpr (EPropApp _ e (Ident ident) exprs) = do
   funPtr <- genTempPointerAddr
   emit (Just funPtr, ILoad (createFunctionPointerType name methodT) vtable)
 
+  castedArgs <- mapM castToSuperClassIfNeccesary $ zip types args
   newPointerAddr <- genPointerAddr ogname
   when (name /= ogname) (
     do
@@ -192,12 +193,23 @@ genExpr (EPropApp _ e (Ident ident) exprs) = do
   let pp = if name /= ogname then newPointerAddr else pointerAddr
   case t of
     Types.Void -> do
-      emit (Nothing, ICall (show t) (ogname ++ "_" ++ ident) (("%" ++ ogname ++ "*", pp) : zip (map show types) args))
+      emit (Nothing, ICall (show t) (show funPtr) (("%" ++ ogname ++ "*", pp) : zip (map show types) castedArgs))
       return $ ImmediateInt 1
     _ -> do
       temp <- genAddr t
-      emit (Just temp, ICall (show t) (ogname ++ "_" ++ ident) (("%" ++ ogname ++ "*", pp) : zip (map show types) args))
+      emit (Just temp, ICall (show t) (show funPtr) (("%" ++ ogname ++ "*", pp) : zip (map show types) castedArgs))
       return temp
+
+castToSuperClassIfNeccesary :: (Types.LatteType, Address) -> GenM Address
+castToSuperClassIfNeccesary (t, a) = case a of
+  (PointerAddr _ name) -> do
+    let (Types.StrippedCls name') = t
+    if name == name' then return a
+    else do
+      newAddr <- genPointerAddr name'
+      emit (Just newAddr, IBitCast ("%" ++ name ++ "*") (show a) ("%" ++ name' ++ "*"))
+      return newAddr
+  _ -> return a
 
 createFunctionPointerType :: String -> (String, String, Types.LatteType) -> String
 createFunctionPointerType clsName (ogClsName, _, Types.Fun retTy argTypes)
@@ -276,7 +288,7 @@ emitBinaryOp op a a' = do
   if t == "i8*"
     then do
       addr <- genAddr Types.Str
-      emit (Just addr, ICall "i8*" "__concat" [("i8*", a), ("i8*", a')])
+      emit (Just addr, ICall "i8*" "@__concat" [("i8*", a), ("i8*", a')])
       return addr
     else do
       addr <- genAddr Types.Int
