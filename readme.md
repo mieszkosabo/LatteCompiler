@@ -10,7 +10,9 @@ W katalogu tests znajduje się `tester.py`, na students można uruchomić go pop
 - back-end LLVM
 - użycie rejestrów i phi zamiast alloc
 - optymalizacja LCSE
-- optymalizacja GCSE
+- optymalizacja GCSE (nowy)
+- tablice (nowy)
+- klasy z dziedziczeniem i metodami wirtualnymi
 
 ## połączenie się z komputerem w labolatorium
 
