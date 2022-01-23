@@ -22,9 +22,9 @@ conditionalReturn t = t
 normalReturn :: ReturnedType -> ReturnedType
 normalReturn = id
 
-get :: ReturnedType -> Maybe LatteType
-get (Return t) = t
-get (ConditionalReturn t) = t
+getT :: ReturnedType -> Maybe LatteType
+getT (Return t) = t
+getT (ConditionalReturn t) = t
 
 isConditionalReturn :: ReturnedType -> Bool
 isConditionalReturn (ConditionalReturn _) = True

@@ -65,7 +65,7 @@ checkItem localScope t (Init pos (Ident ident) e) = do
 normalizeReturnedTypes :: [ReturnedType] -> [LatteType]
 normalizeReturnedTypes ts = if null filtered then [Types.Void] else filtered
   where
-    filtered = nub $ catMaybes $ map get ts
+    filtered = nub $ catMaybes $ map getT ts
 
 checkStmts :: [Stmt] -> StaticCheck (TEnv, [ReturnedType])
 checkStmts stmts = do

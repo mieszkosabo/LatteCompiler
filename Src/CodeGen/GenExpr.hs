@@ -1,13 +1,15 @@
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Src.CodeGen.GenExpr where
 
 import Control.Monad.State
-import Data.List (intercalate)
+import Data.List (intercalate, elemIndex, find)
 import qualified Data.Map as M
 import Parser.AbsLatte
 import Src.CodeGen.State
 import Src.CodeGen.Utils
 import qualified Src.Frontend.Types as Types
 import Src.Frontend.Types (stripPositionFromType)
+import Data.Maybe (fromMaybe)
 
 genExpr :: Expr -> GenM Address
 genExpr (ELitInt _ n) = return $ ImmediateInt $ fromInteger n
@@ -110,20 +112,20 @@ genExpr (ENewArr _ t e) = do
   emit (Just structAddr, IBitCast "i8*" (show structAddrNotCasted) "%Arr*")
   innerArrId <- freshId
   let arrAddr = ArrAddr ty innerArrId
-  arrTmp <- genPointerAddr
+  arrTmp <- genTempPointerAddr
   lenTimesSizeOfInt <- getLLVMTypeSize "i32" len
   emit (Just arrTmp, ICall "i8*" "malloc" [("i32", lenTimesSizeOfInt)])
   emit (Just arrAddr, IBitCast "i8*" (show arrTmp) (show ty ++ "*")) -- create inner arr
   
   -- set length
-  lengthAddr <- genPointerAddr 
-  emit (Just lengthAddr, IGEP "%Arr" structAddr [ImmediateInt 0, ImmediateInt 1])
+  lengthAddr <- genTempPointerAddr 
+  emit (Just lengthAddr, IGEP "%Arr" (show structAddr) [ImmediateInt 0, ImmediateInt 1])
   emit (Nothing, IStore "i32" len lengthAddr)
 
   -- set inner Arr
-  innerArrFieldAddr <- genPointerAddr
-  emit (Just innerArrFieldAddr, IGEP "%Arr" structAddr [ImmediateInt 0, ImmediateInt 0])
-  castedAddr <- genPointerAddr
+  innerArrFieldAddr <- genTempPointerAddr
+  emit (Just innerArrFieldAddr, IGEP "%Arr" (show structAddr) [ImmediateInt 0, ImmediateInt 0])
+  castedAddr <- genTempPointerAddr
   emit (Just castedAddr, IBitCast (show ty ++ "*") (show arrAddr) "i32*")
   emit (Nothing, IStore "i32*" castedAddr innerArrFieldAddr)
 
@@ -137,30 +139,97 @@ genExpr arrGet@(EArrGet _ e e') = do
 
 genExpr (EProp _ e (Ident ident)) = do
   pointerAddr <- genExpr e
-  case pointerAddr of 
+  let unWrapped = unWrapAddr pointerAddr
+  case unWrapped of 
     (ArrAddr t id) -> do
-      lenPointer <- genPointerAddr
-      emit (Just lenPointer, IGEP "%Arr" pointerAddr [ImmediateInt 0, ImmediateInt 1])
+      lenPointer <- genTempPointerAddr
+      emit (Just lenPointer, IGEP "%Arr" (show pointerAddr) [ImmediateInt 0, ImmediateInt 1])
       len <- genAddr Types.Int
       emit (Just len, ILoad "i32" lenPointer)
       return len 
-    _ -> undefined -- FIXME:
+    (PointerAddr id name) -> do
+      clses <- gets classes
+      let cls = clses M.! name
+      attrPointer <- genTempPointerAddr
+      let (attrIdx, ty) = getAttrIdxAndType cls ident
+      emit (Just attrPointer, IGEP ("%" ++ name) (show pointerAddr) [ImmediateInt 0, ImmediateInt attrIdx])
+      val <- genAddr ty 
+      emit (Just val, ILoad (show ty) attrPointer)
+      return val
+    r -> liftIO (print r) >> return undefined
+genExpr (ENewClass _ (ClassType _ (Ident clsName))) = do
+  ptrAddr <- genPointerAddr clsName
+  ptrAddrNotCasted <- genTempPointerAddr
+  size <- getLLVMTypeSize ("%" ++ clsName) (ImmediateInt 1)
+  emit (Just ptrAddrNotCasted, ICall "i8*" "malloc" [("i32", size)])
+  emit (Just ptrAddr, IBitCast "i8*" (show ptrAddrNotCasted) ("%" ++ clsName ++ "*"))
+  emit (Nothing, ICall "void" (clsName ++ "_constructor") [("%" ++ clsName ++ "*", ptrAddr)])
+  return ptrAddr
+genExpr (ENullCast _ (Ident clsName)) = return $ NullPtr ("%" ++ clsName ++ "*")
+genExpr (EPropApp _ e (Ident ident) exprs) = do
+  pointerAddr <- genExpr e
+  args <- mapM genExpr exprs
+  clses <- gets classes
+  let (PointerAddr _ name) = unWrapAddr pointerAddr
+  let cls = clses M.! name
+
+  vtablePtr <- genTempPointerAddr
+  emit (Just vtablePtr, IGEP ("%" ++ name) (show pointerAddr) [ImmediateInt 0, ImmediateInt 0])
+  vtablePtr' <- genTempPointerAddr
+  emit (Just vtablePtr', ILoad ("%" ++ name ++ "_vtable_type*") vtablePtr)
+  vtable <- genTempPointerAddr
+  let Just (methodT, idx) = findWithIndex (\(c, n, tt) -> n == ident) (methods cls)
+  let (ogname, _,  Types.Fun t types) = methodT
+  emit (Just vtable, IGEP ("%" ++ name ++ "_vtable_type") (show vtablePtr') [ImmediateInt 0, ImmediateInt idx])
+  funPtr <- genTempPointerAddr
+  emit (Just funPtr, ILoad (createFunctionPointerType name methodT) vtable)
+
+  newPointerAddr <- genPointerAddr ogname
+  when (name /= ogname) (
+    do
+      emit (Just newPointerAddr, IBitCast ("%" ++ name ++ "*") (show pointerAddr) ("%" ++ ogname ++ "*"))
+    )
+  let pp = if name /= ogname then newPointerAddr else pointerAddr
+  case t of
+    Types.Void -> do
+      emit (Nothing, ICall (show t) (ogname ++ "_" ++ ident) (("%" ++ ogname ++ "*", pp) : zip (map show types) args))
+      return $ ImmediateInt 1
+    _ -> do
+      temp <- genAddr t
+      emit (Just temp, ICall (show t) (ogname ++ "_" ++ ident) (("%" ++ ogname ++ "*", pp) : zip (map show types) args))
+      return temp
+
+createFunctionPointerType :: String -> (String, String, Types.LatteType) -> String
+createFunctionPointerType clsName (ogClsName, _, Types.Fun retTy argTypes)
+    = show retTy ++ "(" ++ intercalate ", " (("%" ++ ogClsName ++ "*") : map show argTypes) ++ ")*"
+
+findWithIndex :: (a -> Bool) -> [a] -> Maybe (a, Int)
+findWithIndex p as = find (p . fst) (zip as [0..])
 
 -- gives pointer to element at idx in array or at propName in an object
 getElementPointer :: Expr -> GenM (Address, Types.LatteType)
 getElementPointer (EArrGet _ e e') = do
-  structPointer@(ArrAddr ty _) <- genExpr e
+  structPointer <- genExpr e
+  let unWrappedPtr@(ArrAddr ty _) = unWrapAddr structPointer
   idx <- genExpr e'
-  innerArrPointer <- genPointerAddr
-  emit (Just innerArrPointer, IGEP "%Arr" structPointer [ImmediateInt 0, ImmediateInt 0])
-  innerArr <- genPointerAddr
+  innerArrPointer <- genTempPointerAddr
+  emit (Just innerArrPointer, IGEP "%Arr" (show structPointer) [ImmediateInt 0, ImmediateInt 0])
+  innerArr <- genTempPointerAddr
   emit (Just innerArr, ILoad "i32*" innerArrPointer)
-  casted <- genPointerAddr
+  casted <- genTempPointerAddr
   emit (Just casted, IBitCast "i32*" (show innerArr) (show ty ++ "*"))
-  valAddr <- genPointerAddr
-  emit (Just valAddr, IGEP (show ty) casted [idx])
+  valAddr <- genTempPointerAddr
+  emit (Just valAddr, IGEP (show ty) (show casted) [idx])
   return (valAddr, ty)
-getElementPointer _ = undefined -- FIXME:
+getElementPointer (EProp _ e (Ident ident)) = do
+  pointerAddr@(PointerAddr id name) <- genExpr e
+  clses <- gets classes
+  let cls = clses M.! name
+  attrPointer <- genTempPointerAddr
+  let (attrIdx, ty) = getAttrIdxAndType cls ident
+  emit (Just attrPointer, IGEP ("%" ++ name) (show pointerAddr) [ImmediateInt 0, ImmediateInt attrIdx])
+  return (attrPointer, ty) 
+getElementPointer _ = undefined
 
 addOpToLLVM :: AddOp -> String
 addOpToLLVM (Plus _) = "add i32"

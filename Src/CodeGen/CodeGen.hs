@@ -12,21 +12,28 @@ import Src.Frontend.Types (stripPositionFromType)
 import qualified Src.Frontend.Types as Types
 import System.IO
 import Src.CodeGen.Optimization (lcse, gcse)
+import System.Exit (exitSuccess)
+import Src.CodeGen.ClassForest (createClassForest, genClassesDefinitions)
 
 genCode :: [TopDef] -> String -> GenM ()
 genCode topdefs filename = do
-  addTopLevelDefs topdefs 
   addPredefinedFunctions filename
   liftIO $ addInternalFunctions filename
   liftIO $ addArrType filename
-  genCode' topdefs filename
+  genClassesDefinitions filename $ createClassForest topdefs
+  addTopLevelDefs fnDefs 
+  genCode' fnDefs filename
   st <- get
   liftIO $ addStringLiteralsDefinitions (stringLiterals st) filename
+  where
+    fnDefs = filter isFnDef topdefs
+    isFnDef TopFnDef {} = True
+    isFnDef _ = False
 
 genCode' :: [TopDef] -> String -> GenM ()
 genCode' [] _ = return ()
 genCode' (f : fs) filename = do
-  let (FnDef _ t (Ident ident) args (Block _ stmts)) = f
+  let (TopFnDef _ (FnDef _ t (Ident ident) args (Block _ stmts))) = f 
   let ty = stripPositionFromType t
   (addresses, env) <- addArgsToEnv args
   let types = argsTypes args
@@ -62,7 +69,7 @@ genCode' (f : fs) filename = do
 
 addFunctionType :: TopDef -> GenM ()
 addFunctionType topdef = do
-  let (FnDef pos t (Ident ident) args block) = topdef
+  let (TopFnDef _ (FnDef _ t (Ident ident) args block)) = topdef 
   let funT = Types.Fun (Types.stripPositionFromType t) (map (\(Arg _ t _) -> Types.stripPositionFromType t) args)
   let (Types.Fun t ts) = funT
   modify (\s -> s {functionTypes = M.insert ident funT (functionTypes s)})

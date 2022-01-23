@@ -4,8 +4,28 @@ import Control.Monad.Reader
 import Control.Monad.State
 import qualified Data.Map as M
 import qualified Src.Frontend.Types as Types
-import Data.List (intercalate, find, intercalate)
+import Data.List (intercalate, find, intercalate, elemIndex)
 import Src.Frontend.Types (LatteType)
+import Parser.AbsLatte (ClassStmt)
+import Data.Maybe (fromMaybe)
+
+getAttrIdxAndType :: LatteClass -> String -> (Int, Types.LatteType)
+getAttrIdxAndType cls ident = (idx, ty)
+  where 
+    trueIdx = fromMaybe undefined (elemIndex ident (map fst (attributes cls)))
+    idx = trueIdx + 1
+    ty = snd $ attributes cls !! trueIdx
+
+type Methods = [(String, String, LatteType)]
+type Attributes = [(String, LatteType)]
+
+data LatteClass = LatteClass {
+    name       :: String,
+    attributes :: Attributes,
+    methods    :: Methods,
+    subClasses :: [LatteClass],
+    clsStmts   :: [ClassStmt]
+} deriving (Show, Eq)
 
 type VarName = String
 
@@ -24,7 +44,8 @@ data Address
   | ImmediateBool Int
   | StrAddr Int
   | ArrAddr LatteType Int -- type id 
-  | PointerAddr Int
+  | PointerAddr Int String
+  | NullPtr String
   | WithLabel VarName Label Address
   deriving Eq
 
@@ -35,18 +56,23 @@ instance Show Address where
   show (ImmediateBool b) = show b
   show (StrAddr i) = "%s" ++ show i
   show (ArrAddr _ i) = "%a" ++ show i
-  show (PointerAddr i) = "%p" ++ show i 
+  show (PointerAddr i _) = "%p" ++ show i
+  show (NullPtr ty) = "null"
   show (WithLabel vn l a) = if head str /= '%' then "%wl" ++ str else str
     where
       str = show a ++ "." ++ vn ++ "." ++ show l
 
+unWrapAddr :: Address -> Address
+unWrapAddr (WithLabel _ _ a) = unWrapAddr a
+unWrapAddr a = a
+
 isPointerAddr :: Address -> Bool
-isPointerAddr (PointerAddr _) = True
+isPointerAddr (PointerAddr _ _) = True
 isPointerAddr (ArrAddr _ _) = True
 isPointerAddr _ = False
 
 getPointerAddrId :: Address -> Int
-getPointerAddrId (PointerAddr i) = i
+getPointerAddrId (PointerAddr i _) = i
 getPointerAddrId (ArrAddr t i) = i
 getPointerAddrId (WithLabel _ _ a) = getPointerAddrId a
 getPointerAddrId _ = undefined
@@ -63,17 +89,11 @@ data GenState = GenState
     currentBlock :: Label,
     functionTypes :: M.Map VarName Types.LatteType,
     stringLiterals :: [StringLiteral],
-    arrays :: M.Map Int Types.LatteType
+    classes :: M.Map String LatteClass,
+    classesForest :: [LatteClass],
+    currentClass :: Maybe LatteClass
   }
   deriving (Show)
-
-saveArray :: Int -> Types.LatteType -> GenM ()
-saveArray id ty = modify $ \s -> s { arrays = M.insert id ty (arrays s)}
-
-getArrType :: Int -> GenM (Maybe Types.LatteType)
-getArrType id = do
-  arrs <- gets arrays
-  return $ M.lookup id arrs
 
 -- Blocks are the vertices of the Control Flow Graph
 data Block = LLVMBlock {
@@ -84,7 +104,7 @@ data Block = LLVMBlock {
 } deriving Eq
 
 instance Show Block where
-  show (LLVMBlock _ instrs _ _) = unlines (map printIntermediateInstr (reverse instrs))
+  show b = unlines (map printIntermediateInstr (reverse $ instrs b))
 
 clearBlocks :: GenM ()
 clearBlocks = modify $ \s -> s { blocks = M.empty }
@@ -142,7 +162,7 @@ data LLVMInstr =
     | IStringLiteralDef StringLiteral
     | ILabel Label
     | IGEPNull String
-    | IGEP String Address [Address]
+    | IGEP String String [Address]
     | IPtrToInt String Address
     | ILoad String Address
     | IStore String Address Address
@@ -179,7 +199,7 @@ instance Show LLVMInstr where
     show (IStringLiteralDef sl) = show sl ++ "\n"
     show (ILabel l) = concat ["L", show l, ":"]
     show (IGEPNull s) = concat ["getelementptr ", s, ", ", s, "* null, i32 1"]
-    show (IGEP ty addr idxs) = concat ["getelementptr ", ty, ", ", ty, "* ", show addr, ", ", intercalate "," (map (\x -> "i32 " ++ show x) idxs)]
+    show (IGEP ty addr idxs) = concat ["getelementptr ", ty, ", ", ty, "* ", addr, ", ", intercalate "," (map (\x -> "i32 " ++ show x) idxs)]
     show (IPtrToInt s addr) = concat ["ptrtoint ", s, "* ", show addr, " to i32"]
     show (ILoad ty addr) = "load " ++ ty ++ ", " ++ ty ++ "* " ++ show addr
     show (IStore ty addr addr') = "store " ++ ty ++ " " ++ show addr ++ ", " ++ ty ++ "* " ++ show addr'
@@ -244,9 +264,16 @@ genAddr Types.Bool = fmap BoolAddr freshId
 genAddr Types.Int = fmap IntAddr freshId
 genAddr Types.Str = fmap StrAddr freshId
 genAddr (Types.Array t) = ArrAddr t <$> freshId
+genAddr (Types.StrippedCls s) = genPointerAddr s
 genAddr a = liftIO $ print a >> undefined
 
-genPointerAddr = fmap PointerAddr freshId
+genTempPointerAddr :: GenM Address
+genTempPointerAddr = genPointerAddr "temp"
+
+genPointerAddr :: String -> GenM Address
+genPointerAddr name = do
+  id <- freshId
+  return $ PointerAddr id name
 genArrAddr :: Types.LatteType -> GenM Address
 genArrAddr t = ArrAddr t <$> freshId
 
@@ -258,22 +285,42 @@ addrToLLVMType (ImmediateBool _) = "i1"
 addrToLLVMType (StrAddr _) = "i8*"
 addrToLLVMType (ArrAddr t _) = "%Arr*"
 addrToLLVMType (WithLabel vn l a) = addrToLLVMType a
-addrToLLVMType (PointerAddr id) = undefined
+addrToLLVMType (PointerAddr id name) = "%" ++ name ++ "*"
+addrToLLVMType (NullPtr s) = s
 
 getVar :: VarName -> GenM Address
 getVar ident = do
   env <- ask
   st <- get
-  let loc = env M.! ident
-  let addr = store st M.! loc
-  return addr
+  let loc = M.lookup ident env
+  case loc of
+    Just l -> do
+      let addr = store st M.! l
+      return addr
+    Nothing -> do
+      (Just cls) <- gets currentClass
+      attrPointer <- genTempPointerAddr
+      let (attrIdx, ty) = getAttrIdxAndType cls ident
+      thisAddr <- getVar "self"
+      emit (Just attrPointer, IGEP ("%" ++ name cls) (show thisAddr) [ImmediateInt 0, ImmediateInt attrIdx])
+      addr <- genAddr ty
+      emit (Just addr, ILoad (show ty) attrPointer)
+      return addr
 
 setVar :: VarName -> Address -> GenM ()
 setVar ident addr = do
   env <- ask
   st <- get
-  let (Just loc) = M.lookup ident env
-  modify (\s -> s {store = M.insert loc addr (store s)})
+  let loc = M.lookup ident env
+  case loc of
+    Just l -> modify (\s -> s {store = M.insert l addr (store s)})
+    Nothing -> do
+      (Just cls) <- gets currentClass
+      attrPointer <- genTempPointerAddr
+      let (attrIdx, ty) = getAttrIdxAndType cls ident
+      thisAddr <- getVar "self"
+      emit (Just attrPointer, IGEP ("%" ++ name cls) (show thisAddr) [ImmediateInt 0, ImmediateInt attrIdx])
+      emit (Nothing, IStore (show ty) addr attrPointer)
 
 declareVar :: VarName -> Address -> GenM (Address, Env)
 declareVar ident addr = do
@@ -295,7 +342,9 @@ initialState =
       stringLiterals = [],
       blocks = M.empty,
       currentBlock = -1,
-      arrays = M.empty
+      classes = M.empty,
+      classesForest = [],
+      currentClass = Nothing
     }
 
 runGen :: GenM a -> IO (a, GenState)

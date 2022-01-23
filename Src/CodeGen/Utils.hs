@@ -65,7 +65,7 @@ createPhiNodes currLabel pairs = do
       let tmp = WithLabel varname currLabel addr
       let phiRhs = createPhiNode loc pairs
       unless 
-        (areAllTheSame (map fst phiRhs) || isPointerAddr addr) -- don't create redundant phi nodes
+        (areAllTheSame (map fst phiRhs)) -- don't create redundant phi nodes
         (
           do 
           emit (Just tmp, IPhi (addrToLLVMType addr) phiRhs)
@@ -85,7 +85,8 @@ wrapAllAddressesWithLabel l = do
     (M.keys env)
     ( \varname -> do
         a <- getVar varname
-        unless (isPointerAddr a) (setVar varname (WithLabel varname l a))
+        -- unless (isPointerAddr a) (setVar varname (WithLabel varname l a))
+        setVar varname (WithLabel varname l a)
     )
 
 areAllTheSame :: Eq a => [a] -> Bool
@@ -97,7 +98,7 @@ areAllTheSame' e = foldr (\ x -> (&&) (e == x)) True
 
 getLLVMTypeSize :: String -> Address -> GenM Address
 getLLVMTypeSize typeName multiplier = do
-  addr <- genPointerAddr
+  addr <- genTempPointerAddr
   emit (Just addr, IGEPNull typeName)
   size <- genAddr Src.Frontend.Types.Int
   emit (Just size, IPtrToInt typeName addr)
