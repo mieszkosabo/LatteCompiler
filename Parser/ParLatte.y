@@ -49,20 +49,23 @@ import Parser.LexLatte
   '[]'      { PT _ (TS _ 24) }
   ']'       { PT _ (TS _ 25) }
   'boolean' { PT _ (TS _ 26) }
-  'else'    { PT _ (TS _ 27) }
-  'false'   { PT _ (TS _ 28) }
-  'for'     { PT _ (TS _ 29) }
-  'if'      { PT _ (TS _ 30) }
-  'int'     { PT _ (TS _ 31) }
-  'new'     { PT _ (TS _ 32) }
-  'return'  { PT _ (TS _ 33) }
-  'string'  { PT _ (TS _ 34) }
-  'true'    { PT _ (TS _ 35) }
-  'void'    { PT _ (TS _ 36) }
-  'while'   { PT _ (TS _ 37) }
-  '{'       { PT _ (TS _ 38) }
-  '||'      { PT _ (TS _ 39) }
-  '}'       { PT _ (TS _ 40) }
+  'class'   { PT _ (TS _ 27) }
+  'else'    { PT _ (TS _ 28) }
+  'extends' { PT _ (TS _ 29) }
+  'false'   { PT _ (TS _ 30) }
+  'for'     { PT _ (TS _ 31) }
+  'if'      { PT _ (TS _ 32) }
+  'int'     { PT _ (TS _ 33) }
+  'new'     { PT _ (TS _ 34) }
+  'null'    { PT _ (TS _ 35) }
+  'return'  { PT _ (TS _ 36) }
+  'string'  { PT _ (TS _ 37) }
+  'true'    { PT _ (TS _ 38) }
+  'void'    { PT _ (TS _ 39) }
+  'while'   { PT _ (TS _ 40) }
+  '{'       { PT _ (TS _ 41) }
+  '||'      { PT _ (TS _ 42) }
+  '}'       { PT _ (TS _ 43) }
   L_Ident   { PT _ (TV _)    }
   L_integ   { PT _ (TI _)    }
   L_quoted  { PT _ (TL _)    }
@@ -84,12 +87,28 @@ Program
 
 TopDef :: { (Parser.AbsLatte.BNFC'Position, Parser.AbsLatte.TopDef) }
 TopDef
-  : Type Ident '(' ListArg ')' Block { (fst $1, Parser.AbsLatte.FnDef (fst $1) (snd $1) (snd $2) (snd $4) (snd $6)) }
+  : FnDef { (fst $1, Parser.AbsLatte.TopFnDef (fst $1) (snd $1)) }
+  | 'class' Ident '{' ListClassStmt '}' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.ClassDef (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1)) (snd $2) (snd $4)) }
+  | 'class' Ident 'extends' Ident '{' ListClassStmt '}' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.ClassExtDef (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1)) (snd $2) (snd $4) (snd $6)) }
 
 ListTopDef :: { (Parser.AbsLatte.BNFC'Position, [Parser.AbsLatte.TopDef]) }
 ListTopDef
   : TopDef { (fst $1, (:[]) (snd $1)) }
   | TopDef ListTopDef { (fst $1, (:) (snd $1) (snd $2)) }
+
+ClassStmt :: { (Parser.AbsLatte.BNFC'Position, Parser.AbsLatte.ClassStmt) }
+ClassStmt
+  : FnDef { (fst $1, Parser.AbsLatte.FnProp (fst $1) (snd $1)) }
+  | Type Ident ';' { (fst $1, Parser.AbsLatte.AttrProp (fst $1) (snd $1) (snd $2)) }
+
+ListClassStmt :: { (Parser.AbsLatte.BNFC'Position, [Parser.AbsLatte.ClassStmt]) }
+ListClassStmt
+  : ClassStmt { (fst $1, (:[]) (snd $1)) }
+  | ClassStmt ListClassStmt { (fst $1, (:) (snd $1) (snd $2)) }
+
+FnDef :: { (Parser.AbsLatte.BNFC'Position, Parser.AbsLatte.FnDef) }
+FnDef
+  : Type Ident '(' ListArg ')' Block { (fst $1, Parser.AbsLatte.FnDef (fst $1) (snd $1) (snd $2) (snd $4) (snd $6)) }
 
 Arg :: { (Parser.AbsLatte.BNFC'Position, Parser.AbsLatte.Arg) }
 Arg
@@ -158,9 +177,12 @@ Expr6
   | 'true' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.ELitTrue (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1))) }
   | 'false' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.ELitFalse (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1))) }
   | 'new' Type '[' Expr ']' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.ENewArr (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1)) (snd $2) (snd $4)) }
+  | 'new' Type { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.ENewClass (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1)) (snd $2)) }
   | Ident '(' ListExpr ')' { (fst $1, Parser.AbsLatte.EApp (fst $1) (snd $1) (snd $3)) }
+  | Expr6 '.' Ident '(' ListExpr ')' { (fst $1, Parser.AbsLatte.EPropApp (fst $1) (snd $1) (snd $3) (snd $5)) }
   | Expr6 '.' Ident { (fst $1, Parser.AbsLatte.EProp (fst $1) (snd $1) (snd $3)) }
   | Expr6 '[' Expr ']' { (fst $1, Parser.AbsLatte.EArrGet (fst $1) (snd $1) (snd $3)) }
+  | '(' Ident ')' 'null' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), Parser.AbsLatte.ENullCast (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1)) (snd $2)) }
   | String { (fst $1, Parser.AbsLatte.EString (fst $1) (snd $1)) }
   | '(' Expr ')' { (uncurry Parser.AbsLatte.BNFC'Position (tokenLineCol $1), (snd $2)) }
 

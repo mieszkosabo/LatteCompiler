@@ -6,8 +6,26 @@ import Data.List (nub)
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, isJust, isNothing)
 import Parser.AbsLatte as Abs
-import Src.Frontend.EvalExprType (evalExprType)
+import Src.Frontend.EvalExprType (evalExprType, isClassType)
 import Src.Frontend.Types as Types
+
+getClassName (Cls n _ _ _) = n
+getClassName (StrippedCls n) = n
+getClassName _ = undefined
+
+isSuperClass :: LatteType -> LatteType -> StaticCheck Bool
+isSuperClass a' b' = do
+  if not (isClassType a') || not (isClassType b') then do return False
+  else do
+    let a = getClassName a'
+    let b = getClassName b'
+    if a == b then do return True
+    else do
+      env <- ask
+      let (Cls _ _ _ superClassName) = fst $ env M.! b
+      case superClassName of
+        Nothing -> return False
+        (Just s) -> isSuperClass a' (fst $ env M.! s)
 
 addIdentToEnv :: LocalScope -> LatteType -> VarName -> Bool -> StaticCheck (TEnv, LocalScope)
 addIdentToEnv localScope t ident isMutable = do
@@ -39,8 +57,9 @@ checkItem localScope t (Init pos (Ident ident) e) = do
     (throwError $ NameAlreadyExistsInScopeError pos (show ident))
   env <- ask
   exprType <- evalExprType e
+  isSuperCls <- isSuperClass t exprType
   when
-    (exprType /= t)
+    (exprType /= t && not isSuperCls)
     (throwError $ TypeAssertFailed pos (show t) (show exprType))
 
 normalizeReturnedTypes :: [ReturnedType] -> [LatteType]
@@ -68,14 +87,19 @@ checkStmt (BStmt _ (Block _ stmts)) ls = do
   return (env, retType, ls)
 checkStmt (Decl pos t items) ls = do
   env <- ask
-  let latteType = stripPositionFromType t
+  latteType <- case t of
+    (Abs.ClassType _ (Abs.Ident clsName)) -> case M.lookup clsName env of
+      Nothing -> throwError $ UseOfUndeclaredName pos clsName
+      Just (classT, _) -> return classT
+    _ -> return $ stripPositionFromType t
   (env', ls') <- addItemsToEnv latteType env ls items $ repeat True
   return (env', [Return Nothing], ls')
 checkStmt (Ass pos lhs rhs) ls = do
   env <- ask
   lhsType <- evalExprType lhs
   rhsType <- evalExprType rhs
-  when (rhsType /= lhsType) (throwError $ TypeAssertFailed pos (show lhsType) (show rhsType))
+  isSuperCls <- isSuperClass lhsType rhsType
+  when (rhsType /= lhsType && not isSuperCls) (throwError $ TypeAssertFailed pos (show lhsType) (show rhsType))
   return (env, [Return Nothing], ls)
 checkStmt (For pos t (Ident ident) e stmt) ls = do
   env <- ask

@@ -23,7 +23,19 @@ data Program' a = Program a [TopDef' a]
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type TopDef = TopDef' BNFC'Position
-data TopDef' a = FnDef a (Type' a) Ident [Arg' a] (Block' a)
+data TopDef' a
+    = TopFnDef a (FnDef' a)
+    | ClassDef a Ident [ClassStmt' a]
+    | ClassExtDef a Ident Ident [ClassStmt' a]
+  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
+
+type ClassStmt = ClassStmt' BNFC'Position
+data ClassStmt' a
+    = FnProp a (FnDef' a) | AttrProp a (Type' a) Ident
+  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
+
+type FnDef = FnDef' BNFC'Position
+data FnDef' a = FnDef a (Type' a) Ident [Arg' a] (Block' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Arg = Arg' BNFC'Position
@@ -73,9 +85,12 @@ data Expr' a
     | ELitTrue a
     | ELitFalse a
     | ENewArr a (Type' a) (Expr' a)
+    | ENewClass a (Type' a)
     | EApp a Ident [Expr' a]
+    | EPropApp a (Expr' a) Ident [Expr' a]
     | EProp a (Expr' a) Ident
     | EArrGet a (Expr' a) (Expr' a)
+    | ENullCast a Ident
     | EString a String
     | Neg a (Expr' a)
     | Not a (Expr' a)
@@ -121,6 +136,17 @@ instance HasPosition Program where
     Program p _ -> p
 
 instance HasPosition TopDef where
+  hasPosition = \case
+    TopFnDef p _ -> p
+    ClassDef p _ _ -> p
+    ClassExtDef p _ _ _ -> p
+
+instance HasPosition ClassStmt where
+  hasPosition = \case
+    FnProp p _ -> p
+    AttrProp p _ _ -> p
+
+instance HasPosition FnDef where
   hasPosition = \case
     FnDef p _ _ _ _ -> p
 
@@ -170,9 +196,12 @@ instance HasPosition Expr where
     ELitTrue p -> p
     ELitFalse p -> p
     ENewArr p _ _ -> p
+    ENewClass p _ -> p
     EApp p _ _ -> p
+    EPropApp p _ _ _ -> p
     EProp p _ _ -> p
     EArrGet p _ _ -> p
+    ENullCast p _ -> p
     EString p _ -> p
     Neg p _ -> p
     Not p _ -> p
