@@ -190,7 +190,7 @@ declareItem t (NoInit _ (Ident ident)) = do
       emit (Just addr, IBitCast "[1 x i8]*" id "i8*")
       return addr
     Types.Bool -> return $ ImmediateBool 0
-    _ -> undefined
+    Types.StrippedCls s -> genPointerAddr s
   (_, env) <- declareVar ident addr
   return env
 declareItem _ (Init _ (Ident ident) e) = do

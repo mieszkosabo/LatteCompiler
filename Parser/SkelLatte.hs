@@ -25,6 +25,17 @@ transProgram x = case x of
 
 transTopDef :: Show a => Parser.AbsLatte.TopDef' a -> Result
 transTopDef x = case x of
+  Parser.AbsLatte.TopFnDef _ fndef -> failure x
+  Parser.AbsLatte.ClassDef _ ident classstmts -> failure x
+  Parser.AbsLatte.ClassExtDef _ ident1 ident2 classstmts -> failure x
+
+transClassStmt :: Show a => Parser.AbsLatte.ClassStmt' a -> Result
+transClassStmt x = case x of
+  Parser.AbsLatte.FnProp _ fndef -> failure x
+  Parser.AbsLatte.AttrProp _ type_ ident -> failure x
+
+transFnDef :: Show a => Parser.AbsLatte.FnDef' a -> Result
+transFnDef x = case x of
   Parser.AbsLatte.FnDef _ type_ ident args block -> failure x
 
 transArg :: Show a => Parser.AbsLatte.Arg' a -> Result
@@ -73,9 +84,12 @@ transExpr x = case x of
   Parser.AbsLatte.ELitTrue _ -> failure x
   Parser.AbsLatte.ELitFalse _ -> failure x
   Parser.AbsLatte.ENewArr _ type_ expr -> failure x
+  Parser.AbsLatte.ENewClass _ type_ -> failure x
   Parser.AbsLatte.EApp _ ident exprs -> failure x
+  Parser.AbsLatte.EPropApp _ expr ident exprs -> failure x
   Parser.AbsLatte.EProp _ expr ident -> failure x
   Parser.AbsLatte.EArrGet _ expr1 expr2 -> failure x
+  Parser.AbsLatte.ENullCast _ ident -> failure x
   Parser.AbsLatte.EString _ string -> failure x
   Parser.AbsLatte.Neg _ expr -> failure x
   Parser.AbsLatte.Not _ expr -> failure x

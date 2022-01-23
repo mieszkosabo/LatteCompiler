@@ -22,9 +22,9 @@ conditionalReturn t = t
 normalReturn :: ReturnedType -> ReturnedType
 normalReturn = id
 
-get :: ReturnedType -> Maybe LatteType
-get (Return t) = t
-get (ConditionalReturn t) = t
+getT :: ReturnedType -> Maybe LatteType
+getT (Return t) = t
+getT (ConditionalReturn t) = t
 
 isConditionalReturn :: ReturnedType -> Bool
 isConditionalReturn (ConditionalReturn _) = True
@@ -75,8 +75,23 @@ data LatteType =
   | Bool 
   | Void 
   | Fun LatteType [LatteType] 
+  | StrippedCls String
+  | Cls String [(String, LatteType)] [(String, LatteType)] (Maybe String) -- name, methods (name, type), attributes (name, types), maybe superclass name
   | Array LatteType
-  deriving (Eq)
+
+instance Eq LatteType where
+  Int == Int = True
+  Str == Str = True
+  Bool == Bool = True
+  Void == Void = True
+  (Fun t ts) == (Fun t' ts') = t == t' && ts == ts'
+  (StrippedCls s) == (StrippedCls s') = s == s'
+  (Cls s _ _ _) == (Cls s' _ _ _) = s == s'
+  (StrippedCls s) == (Cls s' _ _ _) = s == s'
+  (Cls s' _ _ _) == (StrippedCls s) = s == s'
+  (Array t) == (Array t') = t == t'
+  _ == _ = False
+
 
 instance Show LatteType where
   show Int = "i32"
@@ -85,6 +100,8 @@ instance Show LatteType where
   show Void = "void"
   show (Fun t ts) = show t ++ " (" ++ concatMap show ts ++ ")"
   show (Array t) = "%Arr*"
+  show (Cls n _ _ _) = "%" ++ n
+  show (StrippedCls s) = "%" ++ s ++ "*"
 
 -- build in functions types
 printIntType :: LatteType
@@ -120,3 +137,4 @@ stripPositionFromType (Abs.Void _) = Void
 stripPositionFromType (Abs.Fun _ retType argTypes) =
   Fun (stripPositionFromType retType) (map stripPositionFromType argTypes)
 stripPositionFromType (Abs.List _ t) = Array $ stripPositionFromType t
+stripPositionFromType (Abs.ClassType _ (Abs.Ident ident)) = StrippedCls ident

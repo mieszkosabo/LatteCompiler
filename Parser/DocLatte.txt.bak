@@ -30,13 +30,14 @@ except ``"`` unless preceded by ``\``.
 The set of reserved words is the set of terminals appearing in the grammar. Those reserved words that consist of non-letter characters are called symbols, and they are treated in a different way from those that are similar to identifiers. The lexer follows rules familiar from languages like Haskell, C, and Java, including longest match and spacing conventions.
 
 The reserved words used in Latte are the following:
-  | ``boolean`` | ``else`` | ``false`` | ``for``
-  | ``if`` | ``int`` | ``new`` | ``return``
-  | ``string`` | ``true`` | ``void`` | ``while``
+  | ``boolean`` | ``class`` | ``else`` | ``extends``
+  | ``false`` | ``for`` | ``if`` | ``int``
+  | ``new`` | ``return`` | ``string`` | ``true``
+  | ``void`` | ``while`` |  |
 
 The symbols used in Latte are the following:
-  | ( | ) | , | {
-  | } | ; | = | ++
+  | { | } | ; | (
+  | ) | , | = | ++
   | -- | : | [] | [
   | ] | . | - | !
   | && | || | + | *
@@ -53,9 +54,16 @@ and **eps** (empty rule) belong to the BNF notation.
 All other symbols are terminals.
 
   | //Program// | -> | //[TopDef]//
-  | //TopDef// | -> | //Type// //Ident// ``(`` //[Arg]// ``)`` //Block//
+  | //TopDef// | -> | //FnDef//
+  |  |  **|**  | ``class`` //Ident// ``{`` //[ClassStmt]// ``}``
+  |  |  **|**  | ``class`` //Ident// ``extends`` //Ident// ``{`` //[ClassStmt]// ``}``
   | //[TopDef]// | -> | //TopDef//
   |  |  **|**  | //TopDef// //[TopDef]//
+  | //ClassStmt// | -> | //FnDef//
+  |  |  **|**  | //Type// //Ident// ``;``
+  | //[ClassStmt]// | -> | //ClassStmt//
+  |  |  **|**  | //ClassStmt// //[ClassStmt]//
+  | //FnDef// | -> | //Type// //Ident// ``(`` //[Arg]// ``)`` //Block//
   | //Arg// | -> | //Type// //Ident//
   | //[Arg]// | -> | **eps**
   |  |  **|**  | //Arg//
@@ -66,7 +74,7 @@ All other symbols are terminals.
   | //Stmt// | -> | ``;``
   |  |  **|**  | //Block//
   |  |  **|**  | //Type// //[Item]// ``;``
-  |  |  **|**  | //Ident// ``=`` //Expr// ``;``
+  |  |  **|**  | //Expr// ``=`` //Expr// ``;``
   |  |  **|**  | //Ident// ``++`` ``;``
   |  |  **|**  | //Ident// ``--`` ``;``
   |  |  **|**  | ``return`` //Expr// ``;``
@@ -94,7 +102,9 @@ All other symbols are terminals.
   |  |  **|**  | ``true``
   |  |  **|**  | ``false``
   |  |  **|**  | ``new`` //Type// ``[`` //Expr// ``]``
+  |  |  **|**  | ``new`` //Type//
   |  |  **|**  | //Ident// ``(`` //[Expr]// ``)``
+  |  |  **|**  | //Expr6// ``.`` //Ident// ``(`` //[Expr]// ``)``
   |  |  **|**  | //Expr6// ``.`` //Ident//
   |  |  **|**  | //Expr6// ``[`` //Expr// ``]``
   |  |  **|**  | //String//
