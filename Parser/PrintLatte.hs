@@ -146,12 +146,28 @@ instance Print (Parser.AbsLatte.Program' a) where
 
 instance Print (Parser.AbsLatte.TopDef' a) where
   prt i = \case
-    Parser.AbsLatte.FnDef _ type_ id_ args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
+    Parser.AbsLatte.TopFnDef _ fndef -> prPrec i 0 (concatD [prt 0 fndef])
+    Parser.AbsLatte.ClassDef _ id_ classstmts -> prPrec i 0 (concatD [doc (showString "class"), prt 0 id_, doc (showString "{"), prt 0 classstmts, doc (showString "}")])
+    Parser.AbsLatte.ClassExtDef _ id_1 id_2 classstmts -> prPrec i 0 (concatD [doc (showString "class"), prt 0 id_1, doc (showString "extends"), prt 0 id_2, doc (showString "{"), prt 0 classstmts, doc (showString "}")])
 
 instance Print [Parser.AbsLatte.TopDef' a] where
   prt _ [] = concatD []
   prt _ [x] = concatD [prt 0 x]
   prt _ (x:xs) = concatD [prt 0 x, prt 0 xs]
+
+instance Print (Parser.AbsLatte.ClassStmt' a) where
+  prt i = \case
+    Parser.AbsLatte.FnProp _ fndef -> prPrec i 0 (concatD [prt 0 fndef])
+    Parser.AbsLatte.AttrProp _ type_ id_ -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString ";")])
+
+instance Print [Parser.AbsLatte.ClassStmt' a] where
+  prt _ [] = concatD []
+  prt _ [x] = concatD [prt 0 x]
+  prt _ (x:xs) = concatD [prt 0 x, prt 0 xs]
+
+instance Print (Parser.AbsLatte.FnDef' a) where
+  prt i = \case
+    Parser.AbsLatte.FnDef _ type_ id_ args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
 
 instance Print (Parser.AbsLatte.Arg' a) where
   prt i = \case
@@ -218,9 +234,12 @@ instance Print (Parser.AbsLatte.Expr' a) where
     Parser.AbsLatte.ELitTrue _ -> prPrec i 6 (concatD [doc (showString "true")])
     Parser.AbsLatte.ELitFalse _ -> prPrec i 6 (concatD [doc (showString "false")])
     Parser.AbsLatte.ENewArr _ type_ expr -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
+    Parser.AbsLatte.ENewClass _ type_ -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_])
     Parser.AbsLatte.EApp _ id_ exprs -> prPrec i 6 (concatD [prt 0 id_, doc (showString "("), prt 0 exprs, doc (showString ")")])
+    Parser.AbsLatte.EPropApp _ expr id_ exprs -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 id_, doc (showString "("), prt 0 exprs, doc (showString ")")])
     Parser.AbsLatte.EProp _ expr id_ -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 id_])
     Parser.AbsLatte.EArrGet _ expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
+    Parser.AbsLatte.ENullCast _ id_ -> prPrec i 6 (concatD [doc (showString "("), prt 0 id_, doc (showString ")"), doc (showString "null")])
     Parser.AbsLatte.EString _ str -> prPrec i 6 (concatD [printString str])
     Parser.AbsLatte.Neg _ expr -> prPrec i 5 (concatD [doc (showString "-"), prt 6 expr])
     Parser.AbsLatte.Not _ expr -> prPrec i 5 (concatD [doc (showString "!"), prt 6 expr])

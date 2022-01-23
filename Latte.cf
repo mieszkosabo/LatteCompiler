@@ -4,9 +4,21 @@ entrypoints Program ;
 
 Program.   Program ::= [TopDef] ;
 
-FnDef.	   TopDef ::= Type Ident "(" [Arg] ")" Block ;
+TopFnDef.  TopDef ::= FnDef ;
+
+ClassDef.  TopDef ::= "class" Ident "{" [ClassStmt] "}" ;
+
+ClassExtDef. TopDef ::= "class" Ident "extends" Ident "{" [ClassStmt] "}" ;
 
 separator nonempty TopDef "" ;
+
+FnProp.   ClassStmt ::= FnDef ;
+
+AttrProp. ClassStmt ::= Type Ident ";" ;
+
+separator nonempty ClassStmt "" ;
+
+FnDef.	   FnDef ::= Type Ident "(" [Arg] ")" Block ;
 
 Arg. 	   Arg ::= Type Ident;
 
@@ -80,11 +92,17 @@ ELitFalse. Expr6 ::= "false" ;
 
 ENewArr.   Expr6 ::= "new" Type "[" Expr "]" ;
 
+ENewClass. Expr6 ::= "new" Type ;
+
 EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
+
+EPropApp.  Expr6 ::= Expr6 "." Ident "(" [Expr] ")" ;
 
 EProp.     Expr6 ::= Expr6 "." Ident ;
 
 EArrGet.   Expr6 ::= Expr6 "[" Expr "]";
+
+ENullCast. Expr6 ::= "(" Ident ")" "null" ;
 
 EString.   Expr6 ::= String ;
 

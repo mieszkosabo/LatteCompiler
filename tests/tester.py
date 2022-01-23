@@ -61,3 +61,57 @@ for inputFile in goodFiles:
         print(f'{inputFile} BAD')
 
 print(f'\ntests passed {tests_passed}/{len(goodFiles)}')
+
+TEST_DIR = "tests/extensions/struct"
+goodFiles = [f for f in os.listdir(TEST_DIR) if f.endswith('.lat') and not f.startswith(".")]
+
+tests_passed = 0
+for inputFile in goodFiles:
+    subprocess.call('./latc ' + f'{TEST_DIR}/{inputFile}', shell=True)
+    if os.path.exists(f'{TEST_DIR}/{inputFile[:-4]}.input'):
+        p = subprocess.run(f'lli {TEST_DIR}/{inputFile[:-4]}.bc < {TEST_DIR}/{inputFile[:-4]}.input | diff - {TEST_DIR}/{inputFile[:-4]}.output', shell=True)
+    else:
+        p = subprocess.run(f'lli {TEST_DIR}/{inputFile[:-4]}.bc | diff - {TEST_DIR}/{inputFile[:-4]}.output', shell=True)
+    if p.returncode == 0:
+        tests_passed += 1
+        print(f'{inputFile} OK')
+    else:
+        print(f'{inputFile} BAD')
+
+print(f'\ntests passed {tests_passed}/{len(goodFiles)}')
+
+TEST_DIR = "tests/extensions/objects1"
+goodFiles = [f for f in os.listdir(TEST_DIR) if f.endswith('.lat') and not f.startswith(".")]
+
+tests_passed = 0
+for inputFile in goodFiles:
+    subprocess.call('./latc ' + f'{TEST_DIR}/{inputFile}', shell=True)
+    if os.path.exists(f'{TEST_DIR}/{inputFile[:-4]}.input'):
+        p = subprocess.run(f'lli {TEST_DIR}/{inputFile[:-4]}.bc < {TEST_DIR}/{inputFile[:-4]}.input | diff - {TEST_DIR}/{inputFile[:-4]}.output', shell=True)
+    else:
+        p = subprocess.run(f'lli {TEST_DIR}/{inputFile[:-4]}.bc | diff - {TEST_DIR}/{inputFile[:-4]}.output', shell=True)
+    if p.returncode == 0:
+        tests_passed += 1
+        print(f'{inputFile} OK')
+    else:
+        print(f'{inputFile} BAD')
+
+print(f'\ntests passed {tests_passed}/{len(goodFiles)}')
+
+TEST_DIR = "tests/extensions/objects2"
+goodFiles = [f for f in os.listdir(TEST_DIR) if f.endswith('.lat') and not f.startswith(".")]
+
+tests_passed = 0
+for inputFile in goodFiles:
+    subprocess.call('./latc ' + f'{TEST_DIR}/{inputFile}', shell=True)
+    if os.path.exists(f'{TEST_DIR}/{inputFile[:-4]}.input'):
+        p = subprocess.run(f'lli {TEST_DIR}/{inputFile[:-4]}.bc < {TEST_DIR}/{inputFile[:-4]}.input | diff - {TEST_DIR}/{inputFile[:-4]}.output', shell=True)
+    else:
+        p = subprocess.run(f'lli {TEST_DIR}/{inputFile[:-4]}.bc | diff - {TEST_DIR}/{inputFile[:-4]}.output', shell=True)
+    if p.returncode == 0:
+        tests_passed += 1
+        print(f'{inputFile} OK')
+    else:
+        print(f'{inputFile} BAD')
+
+print(f'\ntests passed {tests_passed}/{len(goodFiles)}')
