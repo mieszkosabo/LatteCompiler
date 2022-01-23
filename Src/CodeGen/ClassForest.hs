@@ -109,7 +109,7 @@ initAttr nameWithPercent idx ty = do
                 ++ "\n"
                 ++ "\tstore i8*" ++ show addr ++ ", i8** " ++ show attrPointer
         Types.Bool -> return $ res ++ "\tstore i1 0, i1* " ++ show attrPointer
-        Types.Array _ -> return $ res ++ "\tstore Arr* null, Arr** " ++ show attrPointer
+        Types.Array _ -> return $ res ++ "\tstore %Arr* null, %Arr** " ++ show attrPointer
         Types.StrippedCls s -> return $ res ++ "\tstore %" ++ s ++ "* null, %" ++ s ++ "** " ++ show attrPointer
 
 genMethod :: String -> LatteClass -> ClassStmt -> GenM ()
